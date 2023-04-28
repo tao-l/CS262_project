@@ -15,6 +15,8 @@ class Test_1:
             auction_id = f"auction_id_{i}"
             auction_name = f"auction_{i}"
             auction = AuctionData(auction_name, auction_id, seller, item, base_price)
+            auction.increment = 1
+            
             auction.joined = i >= 1
 
             if i == 1:

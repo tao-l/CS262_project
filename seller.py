@@ -106,7 +106,7 @@ class Seller(QObject):
             if auction.n_active_buyers() == 1:
                 self.finish_auction(auction_id)
         
-        # Notify all buyers that a buyer has withdrawn
+        # Notify all buyers that a buyer has withdrawn, using the announce_price function
         print(f"Seller: buyer [{username}] withdraws from auction [{auction_id}]. Notifying all buyers...")
         self.announce_price_to_all(auction_id)
 
@@ -123,13 +123,12 @@ class Seller(QObject):
             return
         auction = self.data.my_auctions[auction_id]
 
-        # create a announce_price RPC request
+        # create an announce_price RPC request
         request = pb2.AnnouncePriceRequest()
         with self.data.lock:
             request.auction_id = auction_id
             request.round_id = auction.round_id
             request.price = auction.current_price
-            # request.buyer_status = [????]  XXX
             for b in auction.buyers:
                 request.buyer_status.append(
                         pb2.BuyerStatus(username=b, active=auction.is_active(b))

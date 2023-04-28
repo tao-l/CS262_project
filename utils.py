@@ -12,7 +12,8 @@ class ItemData():
         
 
 class AuctionData():
-    def __init__(self, name="", id=None, seller=None, item=None, base_price=0):
+    def __init__(self, name="", id=None, seller=None, item=None,
+                 base_price=0, price_increment_period=1000, increment=0):
         self.name = name
         self.id = id
         if seller == None:
@@ -24,9 +25,14 @@ class AuctionData():
         else:
             self.item = item
 
-        # Prices are represented by integers. 
-        # e.g., $12.34 is represneted as 1234
+        # Base price:
+        # Note : prices are represented by integers. 
+        #        e.g., $12.34 is represneted as 1234
         self.base_price = base_price
+        
+        # the frequency (period) and increment of price adjustment
+        self.price_increment_period = price_increment_period    # Period of price increment in milliseconds (int). 
+        self.increment = increment       # the amount by which the price is increased each time (int)
 
         # record whether the auction has started and finished
         self.started = False
@@ -90,7 +96,7 @@ class AuctionData():
 
 
 def price_to_string(price):
-    return "{:.2f}".format(price / 100)
+    return "${:.2f}".format(price / 100)
 
 
 class RPC_Address:

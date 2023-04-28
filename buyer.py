@@ -240,7 +240,12 @@ class Join_Auction_Page(QWidget):
         row_3.addWidget(self.base_price_label)
         layout.addLayout(row_3)
 
+
         layout.addWidget(QLabel("Auction has not started yet."))
+
+        self.increment_description = QLabel()
+        layout.addWidget(self.increment_description)
+
         layout.addWidget(QLabel("Do you want to join this auction? "))
         
         self.join_button = QPushButton("Join")
@@ -264,6 +269,9 @@ class Join_Auction_Page(QWidget):
         self.seller_label.setText(auction_data.seller.username)
         self.item_label.setText(auction_data.item.name)
         self.base_price_label.setText(price_to_string(auction_data.base_price))
+        seconds = auction_data.price_increment_period / 1000
+        increment_message = f"Once started, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
+        self.increment_description.setText(increment_message)
 
 
 class Auction_Started_Page(QWidget):
