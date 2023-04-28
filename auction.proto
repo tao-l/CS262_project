@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package auction;
+
+
+service BuyerService {
+    rpc announce_price(AnnouncePriceRequest) returns (SuccessMessage);
+    rpc finish_auction(FinishAuctionRequest) returns (SuccessMessage); 
+}
+
+service SellerService {
+    rpc withdraw(UserAuctionPair) returns (SuccessMessage);
+}
+
+service PlatformService {
+    rpc login(User_Address) returns (SuccessMessage); 
+    rpc get_user_address(User) returns (User_Address);      // Fetch the ip address and port of a user
+    
+    rpc buyer_fetch_auctions(User) returns (stream AuctionInfo); 
+    rpc buyer_join_auction(UserAuctionPair) returns (SuccessMessage);
+
+    rpc seller_create_auction(CreateRequest) returns (CreateReponse);
+    rpc seller_start_auction(UserAuctionPair) returns (AuctionInfo); 
+    rpc seller_finish_auction(AuctionInfo) returns (SuccessMessage);
+    rpc seller_update_auction(AuctionInfo) returns (SuccessMessage);
+    rpc seller_fetch_auctions(User) returns (stream AuctionInfo);
+}
+
+
+message SuccessMessage {
+    bool   success = 1;    // whether the operation is successful or not
+    string message = 2;    // error message if not successful
+}
+
+message User {
+    string username = 1;     // username serves as the unique id of a buyer
+    //string name = 2;         // name of buyer. Needs not be unique
+}
+
+message User_Address {
+    string username = 1;
+    string ip_address = 2;
+    string port = 3;
+}
+
+message UserAuctionPair {
+    string username = 1;
+    string auction_id = 2;
+}
+
+// An object that records the status of a buyer in an auction
+message BuyerStatus {
+    string username = 1;     // the username of the buyer 
+    bool   active = 2;       // whether this buyer is still active in the auction
+}
+
+message AnnouncePriceRequest {
+    string auction_id = 1;
+    int64  round_id = 2;
+    // Use integer to represent a price with $0.01 as the minimum unit, 
+    // e.g., $12.34 is represneted as integer 1234
+    int64  price = 3;
+    // The status of all buyers in the auction
+    repeated BuyerStatus buyer_status = 4; 
+}
+
+message FinishAuctionRequest {
+    string auction_id = 1; 
+    string winner_username = 2;     // the username of the winner
+    int64  price = 3;               // the final transaction price
+    // The status of all buyers in the auction
+    repeated BuyerStatus buyer_status = 4; 
+}
+
+message CreateRequest {
+    string username = 1;        // the username of the seller who creates this auction
+    string auction_name = 2;    // the name of the auction
+    string item_name = 3;       // the name of the item for sale
+}
+
+message CreateReponse {
+    bool   success = 1;       // whether the auction is created successfully
+    string auction_id = 2;    // the id of the auction created
+    string message = 3;       // error message if not successful
+}
+
+
+message AuctionInfo {
+    string auction_id = 1;
+    string auction_name = 2; 
+    string seller_username = 3; 
+    string item_name = 4;
+    int64  base_price = 5;
+    
+    bool   started = 6;
+    bool   finished = 7; 
+
+    int64  current_price = 8;
+    int64  round_id = 9; 
+    
+    string winner_username = 10; 
+    int64  transaction_price = 11; 
+
+    repeated BuyerStatus buyer_status = 12; 
+}
+
+// message WithdrawRequest {
+//     // A withdraw request includes the id of the auction
+//     // and the username of the buyer withdrawing from that auction. 
+//     string auction_id = 1; 
+//     string buyer_username = 2; 
+// }
+
+// message WithdrawResponse {
+//     bool success = 1;       // whether this operation is successful
+//     string message = 2;     // error message if not successful
+// }
+
+
+// message FetchRequest {
+//     string username = 1;
+//     string role = 2;
+// }
+
+// message JoinRequest {
+//     string auction_id = 1;       // id of the auction
+//     string buyer_username = 2;   // username of the buyer who wants to join the auction 
+// }
+
+// message JoinResponse {
+//     bool success = 1;       // whether this operation is successful
+//     string message = 2;     // error message if not successful
+// }
+
+
+// Compile by the following command:
+//   python3 -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. auction.proto

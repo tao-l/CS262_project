@@ -1,0 +1,54 @@
+syntax = "proto3"; 
+
+package raft;
+
+
+service RaftService{
+    rpc rpc_append_entries(AE_Request) returns (AE_Response) {}
+    rpc rpc_request_vote(RV_Request) returns (RV_Response) {}
+}
+
+message Command {
+    string json = 1; 
+}
+
+message LogEntry{
+    int64 term = 1;
+    int64 index = 2; 
+    Command command = 3; 
+}
+
+message Persistent {
+    int64 current_term = 1;
+    int32 voted_for = 2; 
+    repeated LogEntry logs = 3; 
+}
+
+message AE_Request{
+    int64 term = 1;
+    int32 leader_id = 2;
+    int64 prev_log_index = 3;
+    int64 prev_log_term = 4; 
+    repeated LogEntry entries = 5; 
+    int64 leader_commit = 6;  
+}
+
+message AE_Response{
+    int64 term = 1;
+    bool success = 2; 
+}
+
+message RV_Request{
+    int64 term = 1; 
+    int32 candidate_id = 2; 
+    int64 last_log_index = 3;
+    int64 last_log_term = 4;
+}
+
+message RV_Response{
+    int64 term = 1;
+    bool vote_granted = 2; 
+}
+
+// Complie by running the following command:
+//   python3 -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. raft.proto
