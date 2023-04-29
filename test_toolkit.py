@@ -20,6 +20,7 @@ class Test_1:
             auction.joined = i >= 1
 
             if i == 1:
+                auction.seller = UserData("seller_1")
                 auction.buyers[buyer_1.username] = True
                 auction.buyers[buyer_2.username] = True
                 auction.started = False
@@ -28,7 +29,7 @@ class Test_1:
                 auction.seller = UserData("seller_2")
                 auction.buyers[buyer_1.username] = True
                 auction.buyers[buyer_2.username] = True
-                auction.started = True
+                auction.started = False
             
             if i == 3:
                 auction.seller = UserData("seller_2")
@@ -53,7 +54,7 @@ class Test_1:
             if i == 6:
                 auction.started = True
                 auction.finished = True
-                auction.winner = buyer_3
+                auction.winner_username = "buyer_3"
                 auction.transaction_price = 99999
             
             all_auctions[auction_id] = auction

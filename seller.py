@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget
-from PyQt6.QtWidgets import QMainWindow, QListWidget, QLabel, QPushButton, QMessageBox
+from PyQt6.QtWidgets import QWidget, QStackedWidget, QListWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QStackedLayout
+from PyQt6.QtWidgets import QLabel, QPushButton, QMessageBox, QLineEdit, QDialog, QDialogButtonBox, QGroupBox
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, QObject
 
@@ -34,7 +34,8 @@ class Data():
 
 
 class Seller(QObject):
-    ui_update_signal = pyqtSignal()
+    ui_update_auctions_signal = pyqtSignal()
+    ui_update_all_signal = pyqtSignal()
 
     def __init__(self, username, rpc_address):
         super().__init__()
@@ -44,7 +45,8 @@ class Seller(QObject):
         self.data.my_auctions = self.get_all_auctions_from_server()
 
         self.ui = SellerUI(self)
-        self.ui_update_signal.connect(lambda : self.ui.update(self.data))
+        self.ui_update_all_signal.connect(lambda : self.ui.update_all(self.data))
+        self.ui_update_auctions_signal.connect(lambda : self.ui.update_auctions(self.data.my_auctions))
 
         # Start seller's RPC service 
         self.rpc = Seller_RPC_Servicer(self)
@@ -56,7 +58,8 @@ class Seller(QObject):
         print("Seller RPC server started.")
 
         # Finally, update UI (by emitting signal to notify the UI component)
-        self.ui_update_signal.emit()
+        self.ui_update_all_signal.emit()
+    
 
     def get_all_auctions_from_server(self):
         return test_toolkit.Test_1.get_all_auctions_from_server()
@@ -114,18 +117,18 @@ class Seller(QObject):
         # The seller's UI needs to be updated. 
         # So, we emit a signal to notify the UI to update.
         # We use a signal because the UI update is done in another thread. 
-        self.ui_update_signal.emit()
+        self.ui_update_auctions_signal.emit()
         return success, message
     
 
     def announce_price_to_all(self, auction_id):
-        if auction_id not in self.data.my_auctions:
-            return
-        auction = self.data.my_auctions[auction_id]
-
         # create an announce_price RPC request
         request = pb2.AnnouncePriceRequest()
         with self.data.lock:
+            if auction_id not in self.data.my_auctions:
+                return
+            auction = self.data.my_auctions[auction_id]
+
             request.auction_id = auction_id
             request.round_id = auction.round_id
             request.price = auction.current_price
@@ -185,7 +188,7 @@ class Seller(QObject):
         # So, we emit a signal to notify the UI to update.
         # (We do not update the UI directly here
         #  becasue the UI update is time consuming and must be single-threaded.)
-        self.ui_update_signal.emit()
+        self.ui_update_auctions_signal.emit()
     
 
     def send_rpc_request_to_buyer(self, rpc_name, buyer, request):
@@ -217,7 +220,43 @@ class Seller(QObject):
         return success, response
     
 
+    def price_increment_loop(self, auction_id):
+        while True:
+            # Announce price to all buyers and update the seller's UI
+            self.announce_price_to_all(auction_id)
+            self.ui_update_auctions_signal.emit()
 
+            # get the price increment period and sleep for that period
+            with self.data.lock:
+                period = self.data.my_auctions[auction_id].price_increment_period
+            time.sleep(period / 1000)
+            
+            # go to the next round if the auction is not finished yet 
+            with self.data.lock:
+                auction = self.data.my_auctions[auction_id]
+                if not auction.finished:
+                    auction.round_id += 1
+                    auction.current_price += auction.increment
+                else:
+                    break
+    
+
+    def start_auction(self, auction_id):
+        # auction = test_toolkit.Test_1.get_auction_info(auction_id)
+        auction = self.data.my_auctions[auction_id]
+        with self.data.lock:
+            self.data.my_auctions[auction_id] = auction
+            auction.started = True
+            auction.round_id = 0
+            auction.current_price = auction.base_price
+            threading.Thread(target=self.price_increment_loop, args=(auction_id,), daemon=True).start()
+    
+
+    def create_auction(self, auction_name, item_name, base_price, period, increment):
+        print("Trying to create auction:", auction_name, item_name, base_price, period, increment)
+        return (False, "Create_auction funcion not impelemented. ")
+    
+    
     def find_address_from_server(self, username):
         return test_toolkit.Test_1.find_address_from_server(username)
 
@@ -250,9 +289,334 @@ class SellerUI(QWidget):
     def __init__(self, model):
         super().__init__()
         self.model = model
-        self.root_widget = QWidget()
-        layout = QHBoxLayout()
-        layout.addWidget(QLabel(self.model.data.username))
+        self.data = None
+
+        # record the id of auction selected by the user, namely, the auction to display on screen
+        self.selected_auction = None
+
+        mainlayout = QHBoxLayout()
+        self.setLayout(mainlayout)
+
+        column_1 = QVBoxLayout()
+        
+        self.username_label = QLabel()
+        self.username_label.setFont(BOLD)
+        column_1.addWidget(self.username_label)
+        column_1.addWidget(QLabel("logged in as seller.\n"))
+
+        column_1.addWidget(QLabel("Auctions you have:"))
+        self.auction_list_widget = QListWidget()
+        self.auction_list_widget.itemClicked.connect(self.auction_list_clicked)
+        column_1.addWidget(self.auction_list_widget)
+        self.auction_id_list = []   # record the id of the auctions in the list
+        mainlayout.addLayout(column_1)
+
+        self.create_button = QPushButton("Create new auction")
+        self.create_button.clicked.connect(self.create_button_clicked)
+        column_1.addWidget(self.create_button)
+
+        column_2 = QVBoxLayout()
+        self.auction_box = QGroupBox()
+        self.stacked_layout = QStackedLayout()
+        self.empty_page = QWidget()
+        self.auction_starting_page = Auction_Starting_Page(self)
+        self.auction_started_page  = Auction_Started_Page(self)
+        self.auction_finished_page = Auction_Finished_Page(self)
+        self.stacked_layout.addWidget(self.empty_page)
+        self.stacked_layout.addWidget(self.auction_starting_page)
+        self.stacked_layout.addWidget(self.auction_started_page)
+        self.stacked_layout.addWidget(self.auction_finished_page)
+        self.stacked_layout.setCurrentWidget(self.empty_page)
+        self.auction_box.setLayout(self.stacked_layout)
+        column_2.addWidget(self.auction_box)
+
+        mainlayout.addLayout(column_2)
     
-    def update(self, data):
-        print("Seller UI update called.")
+
+    """ When user clicks an auction in the auction list, do the following: """
+    def auction_list_clicked(self):
+        selected_row = self.auction_list_widget.currentRow()
+        # records which auction is selected by the user
+        self.selected_auction = self.auction_id_list[selected_row]
+        # then display the selected auction
+        self.update_displayed_auction()
+    
+    
+    class Create_Auction_Dialog(QDialog):
+        def __init__(self, parent, model):
+            super().__init__(parent)
+            self.model = model 
+            self.setWindowTitle("Create a new auction")
+            group_box = QGroupBox()
+            layout = QFormLayout()
+            self.auction_name_LE = QLineEdit()
+            self.item_name_LE = QLineEdit()
+            self.base_price_LE = QLineEdit()
+            self.period_LE = QLineEdit("1.0")
+            self.increment_LE = QLineEdit("0.01")
+            layout.addRow(QLabel("Name of the auction:"), self.auction_name_LE)
+            layout.addRow(QLabel("Name of the item for sale:"), self.item_name_LE)
+            layout.addRow(QLabel("Base price:"), self.base_price_LE)
+            layout.addRow(QLabel("The price increases once every ? seconds:"), self.period_LE)
+            layout.addRow(QLabel("The increment of price each time (in dollars):"), self.increment_LE)
+            group_box.setLayout(layout)
+
+            button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            button_box.accepted.connect(self.ok_button_clicked)
+            button_box.rejected.connect(self.reject)
+
+            mainlayout = QVBoxLayout()
+            mainlayout.addWidget(group_box)
+            mainlayout.addWidget(button_box)
+
+            self.setLayout(mainlayout)
+        
+        def ok_button_clicked(self):
+            # Read user's input and check
+            auction_name = self.auction_name_LE.text()
+            if len(auction_name) > 1000:
+                QMessageBox.critical(self, "", "Auction name is too long!")
+                return
+            
+            item_name = self.item_name_LE.text()
+            if len(item_name) > 10000:
+                QMessageBox.critical(self, "", "Item name is too long!")
+                return
+            
+            (valid, base_price, error_message) = utils.string_to_number_and_check_range(self.base_price_LE.text(), lb=0, ub=1000000)
+            if not valid:
+                QMessageBox.critical(self, "", error_message)
+                return 
+            
+            (valid, period, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0, ub=100000)
+            if not valid:
+                QMessageBox.critical(self, "", error_message)
+                return 
+            
+            (valid, increment, error_message) = utils.string_to_number_and_check_range(self.increment_LE.text(), lb=0, ub=100000)
+            if not valid:
+                QMessageBox.critical(self, "", error_message)
+                return
+            
+            # check is done. Call the model's create_auction() function 
+            period_in_ms = int( period * 1000 )
+            (success, message) = self.model.create_auction(auction_name, item_name, base_price, period_in_ms, increment)
+            if not success:
+                QMessageBox.critical(self, "", message)
+            print(" XXXXXXX Need to update UI here???? ")
+            return 
+
+
+    """ When user clicks the create auction button, do the following: """
+    def create_button_clicked(self):
+        dialog = self.Create_Auction_Dialog(self, self.model)
+        dialog.show()
+
+
+    
+    """ Update the UI of the auction displayed on screen """
+    def update_displayed_auction(self):
+        w = self.empty_page
+        if (self.auctions != None) and (self.selected_auction in self.auctions):
+            # get the data of the selected auction
+            a = self.auctions[self.selected_auction]
+
+            if a.finished == True:
+                w = self.auction_finished_page
+            elif a.started == True:
+                w = self.auction_started_page
+            # elif self.data.username not in a.buyers: 
+                # if a.joined == False:
+            else:
+                w = self.auction_starting_page
+                
+            # update the widget using auction data "a"
+            w.update(a)
+            self.auction_box.setTitle(a.name)
+        
+        self.stacked_layout.setCurrentWidget(w)
+
+    def switch_to_auction_started(self):
+        self.auction_started_page.update(self.auction_data)
+        self.stacked_layout.setCurrentWidget(self.auction_started_page)
+    
+    """ This function updates the entire UI, using the given new data
+    """
+    def update_all(self, data=None):
+        if data == None:
+            data = self.model.data
+        
+        self.username_label.setText(data.username)
+        self.update_auction_list(data.my_auctions)
+        self.update_auctions(data.my_auctions)
+    
+    """ This function only updates the auction list, given new auctions data
+    """
+    def update_auction_list(self, auctions):
+        self.auction_list_widget.clear()
+        self.auction_id_list = []
+        for (auction_id, a) in auctions.items():
+            self.auction_list_widget.addItem(a.name)
+            self.auction_id_list.append(auction_id)
+    
+    """ This function only updates the auction UI, given new auctions data
+    """
+    def update_auctions(self, auctions):
+        self.auctions = auctions
+        self.update_displayed_auction()
+        
+    
+    def display_message(self, message):
+        QMessageBox.critical(self, "", message)
+
+
+class Auction_Starting_Page(QWidget):
+    def __init__(self, root_widget):
+        super().__init__()
+        self.root_widget = root_widget
+        self.auction_id = None
+
+        layout = QVBoxLayout()
+
+        item_row = QHBoxLayout()
+        item_row.addWidget(QLabel("Selling:"))
+        self.item_label = QLabel()
+        self.item_label.setFont(BOLD)
+        item_row.addWidget(self.item_label)
+        layout.addLayout(item_row)
+
+        price_row = QHBoxLayout()
+        price_row.addWidget(QLabel("at base price: "))
+        self.base_price_label = QLabel()
+        self.base_price_label.setFont(BOLD)
+        price_row.addWidget(self.base_price_label)
+        layout.addLayout(price_row)
+
+
+        layout.addWidget(QLabel("Auction has not started yet."))
+
+        self.increment_description = QLabel()
+        layout.addWidget(self.increment_description)
+
+        layout.addWidget(QLabel("Do you want to start this auction? "))
+        
+        self.start_button = QPushButton("Start")
+        self.start_button.clicked.connect(self.start_button_clicked)
+        layout.addWidget(self.start_button)
+
+        self.setLayout(layout)
+
+    def start_button_clicked(self):
+        # auction_id = self.root_widget.selected_auction
+        auction_id = self.auction_id
+        self.root_widget.model.start_auction(auction_id)
+    
+    """ This function is called when we need to update the UI
+        with new auction_data
+    """
+    def update(self, auction_data):
+        self.auction_id = auction_data.id
+        self.item_label.setText(auction_data.item.name)
+        self.base_price_label.setText(price_to_string(auction_data.base_price))
+        seconds = auction_data.price_increment_period / 1000
+        increment_message = f"Once started, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
+        self.increment_description.setText(increment_message)
+
+
+class Auction_Started_Page(QWidget):
+    def __init__(self, root_widget):
+        super().__init__()
+        self.root_widget = root_widget
+        self.auction_id = None
+        
+        layout = QVBoxLayout()
+
+        item_row = QHBoxLayout()
+        item_row.addWidget(QLabel("Selling:"))
+        self.item_label = QLabel()
+        self.item_label.setFont(BOLD)
+        item_row.addWidget(self.item_label)
+        layout.addLayout(item_row)
+
+        layout.addWidget(QLabel("Auction has started."))
+        self.increment_description = QLabel()
+        layout.addWidget(self.increment_description)
+        
+        price_row = QHBoxLayout()
+        price_row.addWidget(QLabel("Current price: "))
+        self.current_price_label = QLabel()
+        self.current_price_label.setFont(BOLD)
+        price_row.addWidget(self.current_price_label)
+        layout.addLayout(price_row)
+
+        buyers_view = QVBoxLayout()
+        buyers_view.addWidget(QLabel("Current buyers:"))
+        self.buyers_list = QListWidget()
+        buyers_view.addWidget(self.buyers_list)
+        layout.addLayout(buyers_view)
+
+        waiting_label = QLabel("Waiting for the auction to finish.\n(Auction will finish when only one buyer is active.)")
+        layout.addWidget(waiting_label)
+
+        self.setLayout(layout)
+
+    """ This function is called when we need to update the UI
+        with new auction_data
+    """
+    def update(self, auction_data):
+        self.auction_id = auction_data.id
+        self.item_label.setText(auction_data.item.name)
+        self.current_price_label.setText(price_to_string(auction_data.current_price))
+        
+        seconds = auction_data.price_increment_period / 1000
+        increment_message = f"The price is increasing by {price_to_string(auction_data.increment)} every {seconds} seconds."
+        self.increment_description.setText(increment_message)
+
+        self.buyers_list.clear()
+        for b in auction_data.buyers:
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
+
+
+class Auction_Finished_Page(QWidget):
+    def __init__(self, root_widget):
+        super().__init__()
+        self.root_widget = root_widget
+        self.auction_id = None
+        
+        layout = QVBoxLayout()
+
+        item_row = QHBoxLayout()
+        item_row.addWidget(QLabel("Sold:"))
+        self.item_label = QLabel()
+        self.item_label.setFont(BOLD)
+        item_row.addWidget(self.item_label)
+        layout.addLayout(item_row)
+
+        layout.addWidget(QLabel("Auction has finished."))
+
+        winner_row = QHBoxLayout()
+        winner_row.addWidget(QLabel("Winner:"))
+        self.winner_label = QLabel()
+        self.winner_label.setFont(BOLD)
+        winner_row.addWidget(self.winner_label)
+        layout.addLayout(winner_row)
+
+        price_row = QHBoxLayout()
+        price_row.addWidget(QLabel("Transaction price: "))
+        self.price_label = QLabel()
+        self.price_label.setFont(BOLD)
+        price_row.addWidget(self.price_label)
+        layout.addLayout(price_row)
+
+        self.setLayout(layout)
+
+    """ This function is called when we need to update the UI
+        with new auction_data
+    """
+    def update(self, auction_data):
+        self.auction_id = auction_data.id
+        self.item_label.setText(auction_data.item.name)
+        self.winner_label.setText(auction_data.winner_username)
+        self.price_label.setText(price_to_string(auction_data.transaction_price))
+

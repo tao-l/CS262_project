@@ -99,6 +99,21 @@ def price_to_string(price):
     return "${:.2f}".format(price / 100)
 
 
+""" Given a stirng s, try to convert it to a number,
+    and check whether it is in the given range (lb, ub).
+    Will return successful or not and error message. 
+    - Return: ( valid : bool,  number : float,  message : str )
+"""
+def string_to_number_and_check_range(s, lb, ub):
+    try:
+        number = float(s)
+    except:
+        return (False, None, f'"{s}" is not a number!')
+    if number <= lb or number >= ub:
+        return (False, None, f"Number {number} is in valid.\nIt should be > {lb} and < {ub}.")
+    return (True, number, "good")
+
+
 class RPC_Address:
     def __init__(self, ip="", port=""):
         self.ip = ip

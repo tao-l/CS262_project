@@ -65,6 +65,7 @@ class Buyer(QObject):
         round_id = request.round_id
         price = request.price
         buyer_status = request.buyer_status
+        # print(f"{self.data.username} receives annouce_price [{auction_id}], price=[{price}]")
 
         # Acquire lock before modifying data
         with self.data.lock:
