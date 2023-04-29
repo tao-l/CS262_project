@@ -256,7 +256,7 @@ class Seller(QObject):
         print("Trying to create auction:", auction_name, item_name, base_price, period, increment)
         return (False, "Create_auction funcion not impelemented. ")
     
-    
+
     def find_address_from_server(self, username):
         return test_toolkit.Test_1.find_address_from_server(username)
 
@@ -351,7 +351,7 @@ class SellerUI(QWidget):
             layout = QFormLayout()
             self.auction_name_LE = QLineEdit()
             self.item_name_LE = QLineEdit()
-            self.base_price_LE = QLineEdit()
+            self.base_price_LE = QLineEdit("0.00")
             self.period_LE = QLineEdit("1.0")
             self.increment_LE = QLineEdit("0.01")
             layout.addRow(QLabel("Name of the auction:"), self.auction_name_LE)
@@ -388,12 +388,12 @@ class SellerUI(QWidget):
                 QMessageBox.critical(self, "", error_message)
                 return 
             
-            (valid, period, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0, ub=100000)
+            (valid, period, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0.001, ub=100000)
             if not valid:
                 QMessageBox.critical(self, "", error_message)
                 return 
             
-            (valid, increment, error_message) = utils.string_to_number_and_check_range(self.increment_LE.text(), lb=0, ub=100000)
+            (valid, increment, error_message) = utils.string_to_number_and_check_range(self.increment_LE.text(), lb=0.01, ub=100000)
             if not valid:
                 QMessageBox.critical(self, "", error_message)
                 return

@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QStackedLayout
-from PyQt6.QtWidgets import QMainWindow, QListWidget, QLabel, QPushButton, QMessageBox, QTableWidget
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QStackedLayout, QGroupBox
+from PyQt6.QtWidgets import QListWidget, QLabel, QPushButton, QMessageBox, QTableWidget
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, QObject
 
@@ -137,7 +137,7 @@ class Buyer(QObject):
         - Input:
             - auction_id (str)  : the id of the auction the buyer is withdrawing from
         - Return:
-            - success    (bool) : whether this operation is successful
+            - success    (bool) : whether this operation is successful or not
             - message    (str)  : error message if not successful
     """
     def withdraw(self, auction_id):
@@ -315,7 +315,7 @@ class Auction_Started_Page(QWidget):
 
         self.active_widget = QWidget()
         active_layout = QVBoxLayout()
-        active_layout.addWidget(QLabel("\nDo you want to withdraw from the auction?"))
+        active_layout.addWidget(QLabel("\nDo you want to withdraw from the auction?\n(Once withdrawn, you cannot re-join the auction.)"))
         self.withdraw_button = QPushButton("Withdraw")
         self.withdraw_button.clicked.connect(self.withdraw_button_clicked)
         active_layout.addWidget(self.withdraw_button)
@@ -337,7 +337,7 @@ class Auction_Started_Page(QWidget):
         success, message = self.root_widget.model.withdraw(auction_id)
         if not success:
             self.root_widget.display_message(message)
-        self.root_widget.update()
+        # self.root_widget.update()
         
 
     """ This function is called when we need to update the UI
@@ -439,17 +439,19 @@ class BuyerUI(QWidget):
         mainlayout.addLayout(column_1)
 
         column_2 = QVBoxLayout()
-        self.stacked_widget = QStackedWidget()
+        self.auction_box = QGroupBox()
+        self.stacked_layout = QStackedLayout()
         self.empty_page = QWidget()
         self.join_auction_page = Join_Auction_Page(self)
         self.auction_started_page = Auction_Started_Page(self)
         self.auction_finished_page = Auction_Finished_Page(self)
-        self.stacked_widget.addWidget(self.empty_page)
-        self.stacked_widget.addWidget(self.join_auction_page)
-        self.stacked_widget.addWidget(self.auction_started_page)
-        self.stacked_widget.addWidget(self.auction_finished_page)
-        self.stacked_widget.setCurrentWidget(self.empty_page)
-        column_2.addWidget(self.stacked_widget)
+        self.stacked_layout.addWidget(self.empty_page)
+        self.stacked_layout.addWidget(self.join_auction_page)
+        self.stacked_layout.addWidget(self.auction_started_page)
+        self.stacked_layout.addWidget(self.auction_finished_page)
+        self.stacked_layout.setCurrentWidget(self.empty_page)
+        self.auction_box.setLayout(self.stacked_layout)
+        column_2.addWidget(self.auction_box)
 
         mainlayout.addLayout(column_2)
 
@@ -475,11 +477,11 @@ class BuyerUI(QWidget):
                 
             # update the widget using auction data "a"
             w.update(a)
-        self.stacked_widget.setCurrentWidget(w)
+        self.stacked_layout.setCurrentWidget(w)
 
     def switch_to_auction_started(self):
         self.auction_started_page.update(self.auction_data)
-        self.stacked_widget.setCurrentWidget(self.auction_started_page)
+        self.stacked_layout.setCurrentWidget(self.auction_started_page)
     
     """ When the buyer's data change, this function should be called to
         update the UI.
