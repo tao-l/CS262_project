@@ -20,6 +20,8 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 
+DEBUG = False
+
 """ Define the data a seller has """
 class Data():
     def __init__(self):
@@ -42,7 +44,6 @@ class Seller(QObject):
 
         self.data = Data()
         self.data.username = username
-        self.data.my_auctions = self.get_all_auctions_from_server()
 
         self.ui = SellerUI(self)
         self.ui_update_all_signal.connect(lambda : self.ui.update_all(self.data))
@@ -56,6 +57,12 @@ class Seller(QObject):
         rpc_server.start()
         threading.Thread(target=rpc_server.wait_for_termination, daemon=True).start()
         print("Seller RPC server started.")
+
+        def data_fetch_loop():
+            while True:
+                self.fetch_auctions_from_server()
+                time.sleep(1)
+        threading.Thread(target=data_fetch_loop, daemon=True).start()
 
         # Finally, update UI (by emitting signal to notify the UI component)
         self.ui_update_all_signal.emit()
@@ -79,10 +86,10 @@ class Seller(QObject):
             - message    (str)  :  error message if not successful
         * Note:
             This function may be called by multiple threads simultaneously
-            (e.g., called by the multi-threaded RPC servicer).
+            (e.g., called by the multi-threaded RPC servicer and when announce_price cannot reach this buyer).
             Lock is needed to prevent race condition. 
     """
-    def withdraw(self, auction_id, username):
+    def withdraw(self, auction_id, username):    
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
                 return False, f"This seller does not have auction {auction_id}"
@@ -92,26 +99,32 @@ class Seller(QObject):
             
             # If the buyer already withdrew previously, simply return success message
             if auction.is_active(username) == False:
-                return True, "Success"
+                return True, "Buyer withdrew previously."
             
             # Now we know that the buyer is active and can try to withdraw it.
             # If the buyer is the only buyer in the auction,
             # then this buyer should be the winner and cannot withdraw.  
             if auction.n_active_buyers() == 1:
-                return False, f"Cannot withdraw!\n Because you are the only active buyer (winner) in the auction."
-
+                # print(f"Buyer {username} cannot withdraw because it is the only buyer left. ")
+                success, message = False, f"Cannot withdraw!\n Because you are the only active buyer (winner) in the auction."
+            else: 
             # Otherwise, we can withdraw the buyer from the auction
-            auction.withdraw(username)
-            success, message = True, "Success"
+                auction.withdraw(username)
+                success, message = True, "Success"
 
             # After the buyer withdraws from the auction, 
             # we count the number of active buyers to determine whether the auction should be finished
             if auction.n_active_buyers() == 1:
-                self.finish_auction(auction_id)
+                auction.finished = True
+        
+        if auction.finished:
+            threading.Thread(target = self.finish_auction,
+                             args   = (auction_id, True),  # the "True" means that this auction has a winner
+                             daemon = True).start()
         
         # Notify all buyers that a buyer has withdrawn, using the announce_price function
-        print(f"Seller: buyer [{username}] withdraws from auction [{auction_id}]. Notifying all buyers...")
-        self.announce_price_to_all(auction_id)
+        print(f"Seller: tried to withdraw [{username}] from auction [{auction_id}], succees = {success}. \n  Notifying all buyers...")
+        self.announce_price_to_all(auction_id, requires_ack=False)
 
         # At this point, the withdrawing operation is completed.
         # The seller's UI needs to be updated. 
@@ -121,7 +134,12 @@ class Seller(QObject):
         return success, message
     
 
-    def announce_price_to_all(self, auction_id):
+    """ Announce price to all buyers in auction [auction_id].
+        Bool parameter [requires_ack] specifies whether the seller requires acknowledgement from buyers. 
+        If requires_ack = True, then a buyer who does not acknowledge the price announcement will be withdrawn. 
+        (Note : this function may be called frequently if the price increment period increment is small.) 
+    """
+    def announce_price_to_all(self, auction_id, requires_ack=True):
         # create an announce_price RPC request
         request = pb2.AnnouncePriceRequest()
         with self.data.lock:
@@ -137,11 +155,41 @@ class Seller(QObject):
                         pb2.BuyerStatus(username=b, active=auction.is_active(b))
                     )
         
-        # broadcast the request to all buyers in the auction
+        # # broadcast the request to all buyers in the auction
+        # for b in auction.buyers:
+        #     threading.Thread(target = self.send_rpc_request_to_buyer,
+        #                      args = ("announce_price", b, request), 
+        #                      daemon = True).start()
+
+        # Broadcast the request to all buyers in the auction. 
         for b in auction.buyers:
-            threading.Thread(target = self.send_rpc_request_to_buyer,
-                             args = ("announce_price", b, request), 
-                             daemon = True).start()
+            print(f"Announce_price sent to {b}")
+            success, response = self.RPC_to_buyer("announce_price", request, b)
+            print(f"Announce_price for {b} success = {success}")
+            if requires_ack:
+                # if requires acknowlegement, 
+                # then a buyer who does not acknowledge the request is withdrawn 
+                if not success:
+                    self.withdraw(auction_id, b)
+    
+
+    def RPC_to_buyer(self, rpc_name, request, buyer):
+        # First, get the buyer's RPC stub
+        with self.data.lock:
+            if buyer not in self.data.rpc_stubs:
+                return False, f"Does not have buyer's RPC stub."
+            stub = self.data.rpc_stubs[buyer]
+        # Then, try to make the RPC call
+        try:
+            if rpc_name == "announce_price":
+                response = stub.announce_price(request)
+            elif rpc_name == "finish_auction":
+                response = stub.finish_auction(request)
+            else:
+                raise Exception(f"RPC {rpc_name} not supported")
+        except grpc.RpcError as e:
+            return False, "RPC error"
+        return True, response
     
 
     """ Finish an auction and notify buyers: 
@@ -152,19 +200,22 @@ class Seller(QObject):
             (e.g., called by the multi-threaded RPC servicer).
             Lock is needed to prevent race condition. 
     """
-    def finish_auction(self, auction_id):
-        if auction_id not in self.data.my_auctions:
-            return
-        
-        print(f"Seller [{self.data.username}]: [{auction_id}] is finished")
-        # with self.data.lock:
-        for i in range(1):
-            print("XXXXXXXXXXXXXXX Got lock XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-            # Update the data
+    def finish_auction(self, auction_id, has_winner=True):
+        print(f"Seller [{self.data.username}]: finishing [{auction_id}]")
+        with self.data.lock:
+            if auction_id not in self.data.my_auctions:
+                return
+            # Update the auction data
             auction = self.data.my_auctions[auction_id]
             auction.finished = True
-            auction.winner_username = auction.get_winner()
-            auction.transaction_price = auction.current_price
+            if has_winner:
+                # the case that the auction has a winner
+                auction.winner_username = auction.get_winner()
+                auction.transaction_price = auction.current_price
+            else:
+                # the case that the auction does not have a winner when finishing
+                auction.winner_username = ""
+                auction.transaction_price = auction.base_price
             rpc_request = pb2.FinishAuctionRequest(
                             auction_id = auction_id,
                             winner_username = auction.winner_username, 
@@ -220,6 +271,9 @@ class Seller(QObject):
         return success, response
     
 
+    """ A loop that continuously increases the price of acution [auction_id], 
+        used when the auction is started. 
+    """
     def price_increment_loop(self, auction_id):
         while True:
             # Announce price to all buyers and update the seller's UI
@@ -241,15 +295,38 @@ class Seller(QObject):
                     break
     
 
-    def start_auction(self, auction_id):
+    """ Seller starts auction [auction_id],
+        Parameter [resume] indicates whether this auction is resumed from a previously started but paused auction
+    """
+    def start_auction(self, auction_id, resume=False):
+        # First, obtain the acution (buyer) information from the platform:
         # auction = test_toolkit.Test_1.get_auction_info(auction_id)
         auction = self.data.my_auctions[auction_id]
+
+        # Then, obtain the RPC address of all buyers:
+        for buyer in auction.buyers:
+            (got_address, result) = self.find_address_from_server(buyer)
+            if got_address:
+                channel = grpc.insecure_channel(result.ip + ":" + result.port)
+                stub = auction_pb2_grpc.BuyerServiceStub(channel)
+                with self.data.lock:
+                    self.data.rpc_stubs[buyer] = stub
+        
+        # Then, change the auction to started stage
         with self.data.lock:
             self.data.my_auctions[auction_id] = auction
             auction.started = True
-            auction.round_id = 0
-            auction.current_price = auction.base_price
-            threading.Thread(target=self.price_increment_loop, args=(auction_id,), daemon=True).start()
+            if not resume:
+                auction.round_id = 0
+                auction.current_price = auction.base_price
+            else: 
+                # If the auction is resumed, no need to set round_id and current_price 
+                auction.resume = False
+        
+        # Finally, start a loop to continuously increase the price
+        threading.Thread(target=self.price_increment_loop, args=(auction_id,), daemon=True).start()
+
+        return True, "Success"
     
 
     def create_auction(self, auction_name, item_name, base_price, period, increment):
@@ -259,6 +336,64 @@ class Seller(QObject):
 
     def find_address_from_server(self, username):
         return test_toolkit.Test_1.find_address_from_server(username)
+    
+
+    """ This function fetches all data (auctions & addresses) from the platform
+        to update the local data. 
+    """
+    def fetch_data_from_server(self):
+        # First, fetch all the auction data
+        self.fetch_auctions_from_server()
+        # Then, fetch the RPC addresses of all buyers
+    
+
+    """ This function fetches all auction data from the platform to update the local data. 
+    """
+    def fetch_auctions_from_server(self):
+        auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
+        
+        platform_auctions = self.get_all_auctions_from_server()
+        
+        for (id, pa) in platform_auctions.items():
+            if pa.seller.username != self.data.username:
+                # ignore auctions that are not this seller's
+                continue
+
+            with self.data.lock:
+                if id in self.data.my_auctions:
+                    # For an auction that is in both platforms and seller's data, 
+                    #  - If the auction is finished: replace the seller's data with the platform's:
+                    if pa.finished:
+                        if DEBUG:
+                            print(id, "finished")
+                        self.data.my_auctions[id] = pa
+                        continue
+                    #  - If the auction is not started and not finished: replace the seller's data with the platform's:  
+                    elif not pa.started:
+                        if DEBUG:
+                            print(id, "not started")
+                        self.data.my_auctions[id] = pa
+                        continue 
+                    #  - Otherwise, the auction is started and not finished:
+                    #    Do not change the seller's data because the auction is taken cared of by the seller now
+                    else:
+                        continue
+                else:
+                    # For an auction that is in the platform's data but in the seller's, 
+                    # add this auction to the seller's auction list
+                    if DEBUG: print(id, "new auction")
+                    self.data.my_auctions[id] = pa
+                    auction_list_needs_update = True
+                    # If this auction has started, set "resume = True" so that the UI will show a "resume" button
+                    if pa.started:
+                        pa.resume = True
+        
+        # If the auction lists needs to update, update the entire UI, 
+        if auction_list_needs_update:
+            self.ui_update_all_signal.emit()
+        else:
+        # Otherwise, just update the auction part of the UI. 
+            self.ui_update_auctions_signal.emit() 
 
 
 """ The RPC servicer on a seller client: provides RPC services to a buyer.
@@ -274,11 +409,10 @@ class Seller_RPC_Servicer(auction_pb2_grpc.SellerServiceServicer):
         # obtain data from the RPC request
         auction_id = request.auction_id
         buyer_username = request.username
-        logging.debug(f"Seller received: withdraw ( {auction_id}, {buyer_username} )")
+        logging.debug(f"Seller received RPC: withdraw ( {auction_id}, {buyer_username} )")
         # call the parent object's withdraw() function to perform the operation
         success, message = self.parent.withdraw(auction_id, buyer_username)
-        if success:
-            logging.debug(f"     Success: Buyer {buyer_username} withdrew from auction {auction_id}")
+        logging.debug(f"     RPC response: success = {success}, message = {message}")
         return pb2.SuccessMessage(success=success, message=message)
 
 
@@ -321,10 +455,12 @@ class SellerUI(QWidget):
         self.empty_page = QWidget()
         self.auction_starting_page = Auction_Starting_Page(self)
         self.auction_started_page  = Auction_Started_Page(self)
+        self.auction_resume_page   = Auction_Resume_Page(self)
         self.auction_finished_page = Auction_Finished_Page(self)
         self.stacked_layout.addWidget(self.empty_page)
         self.stacked_layout.addWidget(self.auction_starting_page)
         self.stacked_layout.addWidget(self.auction_started_page)
+        self.stacked_layout.addWidget(self.auction_resume_page)
         self.stacked_layout.addWidget(self.auction_finished_page)
         self.stacked_layout.setCurrentWidget(self.empty_page)
         self.auction_box.setLayout(self.stacked_layout)
@@ -424,12 +560,13 @@ class SellerUI(QWidget):
             if a.finished == True:
                 w = self.auction_finished_page
             elif a.started == True:
-                w = self.auction_started_page
-            # elif self.data.username not in a.buyers: 
-                # if a.joined == False:
+                if a.resume == True:
+                    w = self.auction_resume_page
+                else:
+                    w = self.auction_started_page
             else:
                 w = self.auction_starting_page
-                
+            
             # update the widget using auction data "a"
             w.update(a)
             self.auction_box.setTitle(a.name)
@@ -498,8 +635,14 @@ class Auction_Starting_Page(QWidget):
         self.increment_description = QLabel()
         layout.addWidget(self.increment_description)
 
+        buyers_view = QVBoxLayout()
+        buyers_view.addWidget(QLabel("Current buyers:"))
+        self.buyers_list = QListWidget()
+        buyers_view.addWidget(self.buyers_list)
+        layout.addLayout(buyers_view)
+
         layout.addWidget(QLabel("Do you want to start this auction? "))
-        
+
         self.start_button = QPushButton("Start")
         self.start_button.clicked.connect(self.start_button_clicked)
         layout.addWidget(self.start_button)
@@ -507,9 +650,12 @@ class Auction_Starting_Page(QWidget):
         self.setLayout(layout)
 
     def start_button_clicked(self):
-        # auction_id = self.root_widget.selected_auction
         auction_id = self.auction_id
-        self.root_widget.model.start_auction(auction_id)
+        # call the model's start_auction() function to start the auction
+        success, message = self.root_widget.model.start_auction(auction_id)
+        if not success:
+            # if not successful, display error message
+            QMessageBox.critical(self, "", message)
     
     """ This function is called when we need to update the UI
         with new auction_data
@@ -521,6 +667,13 @@ class Auction_Starting_Page(QWidget):
         seconds = auction_data.price_increment_period / 1000
         increment_message = f"Once started, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
         self.increment_description.setText(increment_message)
+
+        self.buyers_list.clear()
+        for b in auction_data.buyers:
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
+
+
 
 
 class Auction_Started_Page(QWidget):
@@ -570,6 +723,72 @@ class Auction_Started_Page(QWidget):
         
         seconds = auction_data.price_increment_period / 1000
         increment_message = f"The price is increasing by {price_to_string(auction_data.increment)} every {seconds} seconds."
+        self.increment_description.setText(increment_message)
+
+        self.buyers_list.clear()
+        for b in auction_data.buyers:
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
+
+
+class Auction_Resume_Page(QWidget):
+    def __init__(self, root_widget):
+        super().__init__()
+        self.root_widget = root_widget
+        self.auction_id = None
+        
+        layout = QVBoxLayout()
+
+        item_row = QHBoxLayout()
+        item_row.addWidget(QLabel("Selling:"))
+        self.item_label = QLabel()
+        self.item_label.setFont(BOLD)
+        item_row.addWidget(self.item_label)
+        layout.addLayout(item_row)
+
+        price_row = QHBoxLayout()
+        price_row.addWidget(QLabel("Auction started previously and paused at price:"))
+        self.current_price_label = QLabel()
+        self.current_price_label.setFont(BOLD)
+        price_row.addWidget(self.current_price_label)
+        layout.addLayout(price_row)
+
+        self.increment_description = QLabel()
+        layout.addWidget(self.increment_description)
+        
+        buyers_view = QVBoxLayout()
+        buyers_view.addWidget(QLabel("Current buyers:"))
+        self.buyers_list = QListWidget()
+        buyers_view.addWidget(self.buyers_list)
+        layout.addLayout(buyers_view)
+    
+        layout.addWidget(QLabel("Do you want to resume this auction?"))
+        
+        self.resume_button = QPushButton("Resume")
+        self.resume_button.clicked.connect(self.resume_button_clicked)
+        layout.addWidget(self.resume_button)
+
+        self.setLayout(layout)
+
+    def resume_button_clicked(self):
+        auction_id = self.auction_id
+        # call the model's start_auction() function to resume the auction
+        success, message = self.root_widget.model.start_auction(auction_id, resume=True)
+        if not success:
+            # if not successful, display error message
+            QMessageBox.critical(self, "", message)
+
+
+    """ This function is called when we need to update the UI
+        with new auction_data
+    """
+    def update(self, auction_data):
+        self.auction_id = auction_data.id
+        self.item_label.setText(auction_data.item.name)
+        self.current_price_label.setText(price_to_string(auction_data.current_price))
+        
+        seconds = auction_data.price_increment_period / 1000
+        increment_message = f"Once resumed, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
         self.increment_description.setText(increment_message)
 
         self.buyers_list.clear()

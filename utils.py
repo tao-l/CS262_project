@@ -37,6 +37,8 @@ class AuctionData():
         # record whether the auction has started and finished
         self.started = False
         self.finished = False
+        
+        self.resume = False  # If a seller application restarts and fetches from the platform a previously started auction, this auction needs to be resumed.
 
         # For auction that has been started, need current_price and round_id
         self.current_price = base_price
