@@ -308,8 +308,8 @@ class Seller(QObject):
         """ Seller starts auction [auction_id].
 
             Parameters:
-            - auction_id : the id of the auction to start. 
-            - resume     : indicates whether this auction is resumed from a previously started but paused auction. 
+            - auction_id (str)  : the id of the auction to start. 
+            - resume     (bool) : indicates whether this auction is resumed from a previously started but paused auction. 
         """
         # First, obtain the acution (buyer) information from the platform:
         # auction = test_toolkit.Test_1.get_auction_info(auction_id)
@@ -329,10 +329,11 @@ class Seller(QObject):
             self.data.my_auctions[auction_id] = auction
             auction.started = True
             if not resume:
+                # If the auction is started from scratch, reset round_id and current_price 
                 auction.round_id = 0
                 auction.current_price = auction.base_price
             else: 
-                # If the auction is resumed, no need to set round_id and current_price 
+                # If the auction is resumed, no need to reset round_id and current_price 
                 auction.resume = False
         
         # Finally, start a loop to continuously increase the price
@@ -341,12 +342,14 @@ class Seller(QObject):
         return True, "Success"
     
 
-    def create_auction(self, auction_name, item_name, base_price, period, increment):
-        print("Trying to create auction:", auction_name, item_name, base_price, period, increment)
+    def create_auction(self, auction_name, item, base_price, period, increment):
+        print("Trying to create auction:", auction_name, item.name, base_price, period, increment)
         request = {}
+        request["op"] = "SELLER_CREATE_AUCTION"
         request["seller_username"] = self.data.username
         request["auction_name"] = auction_name
-        request["item_name"] = item_name
+        request["item_name"] = item.name
+        request["item_descrption"] = item.description
         request["base_price"] = base_price
         request["price_increment_period"] = period
         request["increment"] = increment
@@ -354,7 +357,7 @@ class Seller(QObject):
         # If create_auction does not succeed, return error message
         if not success:
             return success, message
-        # Otherwise, fetch auction data (including the newly created auction) from server
+        # Otherwise (succeeded), fetch auction data (including the newly created auction) from server
         self.fetch_auctions_from_server()
         return success, message
     
@@ -510,11 +513,13 @@ class SellerUI(QWidget):
             layout = QFormLayout()
             self.auction_name_LE = QLineEdit()
             self.item_name_LE = QLineEdit()
+            self.item_description_LE = QLineEdit()
             self.base_price_LE = QLineEdit("0.00")
             self.period_LE = QLineEdit("1.0")
             self.increment_LE = QLineEdit("0.01")
             layout.addRow(QLabel("Name of the auction:"), self.auction_name_LE)
             layout.addRow(QLabel("Name of the item for sale:"), self.item_name_LE)
+            layout.addRow(QLabel("Description of the item:"), self.item_description_LE)
             layout.addRow(QLabel("Base price:"), self.base_price_LE)
             layout.addRow(QLabel("The price increases once every ? seconds:"), self.period_LE)
             layout.addRow(QLabel("The increment of price each time (in dollars):"), self.increment_LE)
@@ -533,7 +538,7 @@ class SellerUI(QWidget):
         def ok_button_clicked(self):
             # Read user's input and check whether the input is valid
             auction_name = self.auction_name_LE.text()
-            if len(auction_name) > 1000: 
+            if len(auction_name) > 500: 
                 QMessageBox.critical(self, "", "Auction name is too long!")
                 return
             if auction_name == "":
@@ -541,11 +546,16 @@ class SellerUI(QWidget):
                 return
             
             item_name = self.item_name_LE.text()
-            if len(item_name) > 10000:
+            if len(item_name) > 500:
                 QMessageBox.critical(self, "", "Item name is too long!")
                 return
             if item_name == "":
                 QMessageBox.critical(self, "", "Item name cannot be empty!")
+                return
+            
+            item_description = self.item_description_LE.text()
+            if len(item_description) > 100000:
+                QMessageBox.critical(self, "", "Item description is too long!")
                 return 
             
             (valid, base_price, error_message) = utils.string_to_number_and_check_range(self.base_price_LE.text(), lb=0, ub=1000000)
@@ -565,7 +575,9 @@ class SellerUI(QWidget):
             
             # check is done. Call the model's create_auction() function 
             period_in_ms = int( period * 1000 )
-            (success, message) = self.model.create_auction(auction_name, item_name, base_price, period_in_ms, increment)
+            (success, message) = self.model.create_auction(auction_name,
+                                                           ItemData(name=item_name, description=item_description),
+                                                           base_price, period_in_ms, increment)
             if not success:
                 QMessageBox.critical(self, "", message)
             else:

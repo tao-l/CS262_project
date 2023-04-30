@@ -1,7 +1,7 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QStackedLayout, QGroupBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QStackedLayout, QFormLayout, QGroupBox
 from PyQt6.QtWidgets import QListWidget, QLabel, QPushButton, QMessageBox, QTableWidget
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import pyqtSignal, QObject
+from PyQt6.QtCore import pyqtSignal, QObject, Qt
 
 from concurrent import futures
 import grpc
@@ -124,14 +124,42 @@ class Buyer(QObject):
     
 
     def get_all_auctions_from_server(self):
-        return test_toolkit.Test_1.get_all_auctions_from_server()
+        return test_toolkit.test_1.get_all_auctions()
     
     def join_auction(self, auction_id):
-        (success, message) = True, "Cannot join this auction"
+        logging.info(f"Buyer {self.data.username} tries to join auction {auction_id}")
+        request = {}
+        request["op"] = "BUYER_JOIN_AUCTION"
+        request["username"] = self.data.username
+        request["auction_id"] = auction_id
+        success, result = self.rpc_to_server(request)
         if not success:
-            self.ui.display_message(message)
-        self.update_auction_data(auction_id)
+            return success, "Cannot join this auction"
+        self.ui_update_signal.emit()
+
+        return success, "success"
     
+
+    def quit_auction(self, auction_id):
+        logging.info(f"Buyer {self.data.username} tries to quit from auction {auction_id}")
+        request = {}
+        request["op"] = "BUYER_QUIT_AUCTION"
+        request["username"] = self.data.username
+        request["auction_id"] = auction_id
+        success, result = self.rpc_to_server(request)
+        if not success:
+            return success, "Cannot quit from this auction"
+        self.ui_update_signal.emit()
+
+        return success, "success"
+    
+
+    def rpc_to_server(self, request):
+        if request["op"] == "BUYER_JOIN_AUCTION":
+            return test_toolkit.test_1.buyer_join_auction(request)
+        if request["op"] == "BUYER_QUIT_AUCTION":
+            return test_toolkit.test_1.buyer_quit_auction(request)
+
 
     """ Perform the operation that the buyer (self) withdraw from an auction
         - Input:
@@ -180,12 +208,7 @@ class Buyer(QObject):
     
 
     def find_address_from_server(self, username):
-        return test_toolkit.Test_1.find_address_from_server(username)
-
-    def update_auction_data(self, auction_id):
-        with self.lock:
-            self.data.auctions[auction_id].joined = True
-        self.ui_update_signal.emit()
+        return test_toolkit.test_1.find_address_from_server(username)
 
 
 """ The RPC servicer on a buyer client: provides RPC services to a seller.
@@ -466,17 +489,24 @@ class BuyerUI(QWidget):
             # get the data of the selected auction
             a = self.data.auctions[self.selected_auction]
 
-            if a.finished == True:
-                w = self.auction_finished_page
-            elif a.started == True:
-                w = self.auction_started_page
-            # elif self.data.username not in a.buyers: 
-                # if a.joined == False:
-            else:
-                w = self.join_auction_page
+            # w = AuctionPage(self, a)
+
+            if a.started == False and a.finished == False:
+                w = Auction_Prestarted_Page(self, a)
+            
+            self.stacked_layout.addWidget(w)
+
+            # if a.finished == True:
+            #     w = self.auction_finished_page
+            # elif a.started == True:
+            #     w = self.auction_started_page
+            # # elif self.data.username not in a.buyers: 
+            #     # if a.joined == False:
+            # else:
+            #     w = self.join_auction_page
                 
-            # update the widget using auction data "a"
-            w.update(a)
+            # # update the widget using auction data "a"
+            # w.update(a)
         self.stacked_layout.setCurrentWidget(w)
 
     def switch_to_auction_started(self):
@@ -503,3 +533,137 @@ class BuyerUI(QWidget):
     
     def display_message(self, message):
         QMessageBox.critical(self, "", message)
+
+
+
+
+class Auction_Page_Base(QWidget):
+    def __init__(self, root_widget, auction_data):
+        super().__init__()
+        self.root_widget = root_widget
+        self.auction_id = auction_data.id
+        
+        self.mainlayout = QVBoxLayout()
+        self.setLayout(self.mainlayout)
+
+        auction_name_label = QLabel(auction_data.name)
+        auction_name_font = QFont()
+        auction_name_font.setPointSize(18)
+        auction_name_label.setFont(auction_name_font)
+        auction_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.mainlayout.addWidget(auction_name_label)
+
+        seller_item_form = QFormLayout()
+        seller_label = QLabel(auction_data.seller.username)
+        BOLD = QFont()
+        BOLD.setBold(True)
+        seller_label.setFont(BOLD)
+        item_name_label = QLabel(auction_data.item.name)
+        item_name_label.setFont(BOLD)
+        item_description_label = QLabel(auction_data.item.description)
+        seller_item_form.addRow(QLabel("seller:"), seller_label)
+        seller_item_form.addRow(QLabel("Item:"),   item_name_label)
+        seller_item_form.addRow(QLabel("Description:"), item_description_label)
+        self.mainlayout.addLayout(seller_item_form)
+
+
+# class Price_Increment_Label(QLabel):
+#         def __init__(self): 
+#         seconds = auction_data.price_increment_period / 1000
+#         increment_message = f"Once started, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
+#         self.increment_description.setText(increment_message)
+
+class Auction_Prestarted_Page(Auction_Page_Base):
+    def __init__(self, root_widget, auction_data):
+        super().__init__(root_widget, auction_data)
+        self.mainlayout.addWidget(QLabel("Auction has not started."))
+        seconds = auction_data.price_increment_period / 1000
+        increment_message = f"Once started, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
+        self.mainlayout.addWidget(QLabel(increment_message))
+
+        if self.root_widget.data.username not in auction_data.buyers:
+            self.mainlayout.addWidget(QLabel("Do you want to join this auction? "))
+            self.join_button = QPushButton("Join")
+            self.join_button.clicked.connect(self.join_button_clicked)
+            self.mainlayout.addWidget(self.join_button)
+        else:
+            self.mainlayout.addWidget(QLabel("You are in the auction, waiting for the seller to start...."))
+            self.mainlayout.addWidget(QLabel("Do you want to quit from the auction? "))
+            self.quit_button = QPushButton("Quit")
+            self.quit_button.clicked.connect(self.quit_button_clicked)
+            self.mainlayout.addWidget(self.quit_button)
+
+    def join_button_clicked(self):
+        auction_id = self.auction_id
+        success, message = self.root_widget.model.join_auction(auction_id)
+        if not success:
+            QMessageBox.critical(self, "", message)
+    
+    def quit_button_clicked(self):
+        auction_id = self.auction_id
+        success, message = self.root_widget.model.quit_auction(auction_id)
+        if not success:
+            QMessageBox.critical(self, "", message)
+
+        # mainlayout.addWidget(QLabel("Auction has started."))
+
+        # price_row = QHBoxLayout()
+        # price_row.addWidget(QLabel("Current price: "))
+        # self.current_price_label = QLabel()
+        # self.current_price_label.setFont(BOLD)
+        # price_row.addWidget(self.current_price_label)
+        # mainlayout.addLayout(price_row)
+
+        # buyers_view = QVBoxLayout()
+        # buyers_view.addWidget(QLabel("Current buyers:"))
+        # self.buyers_list = QListWidget()
+        # buyers_view.addWidget(self.buyers_list)
+        # mainlayout.addLayout(buyers_view)
+
+
+        # self.active_widget = QWidget()
+        # active_layout = QVBoxLayout()
+        # active_layout.addWidget(QLabel("\nDo you want to withdraw from the auction?\n(Once withdrawn, you cannot re-join the auction.)"))
+        # self.withdraw_button = QPushButton("Withdraw")
+        # self.withdraw_button.clicked.connect(self.withdraw_button_clicked)
+        # active_layout.addWidget(self.withdraw_button)
+        # self.active_widget.setLayout(active_layout)
+
+        # self.withdrew_info = QLabel("\nYou have withdrawn from the auction.\nCannot re-join.")
+
+        # self.active_withdrew_layout = QStackedLayout()
+        # self.active_withdrew_layout.addWidget(self.active_widget)
+        # self.active_withdrew_layout.addWidget(self.withdrew_info)
+        # self.active_withdrew_layout.setCurrentWidget(self.active_widget)
+
+        # mainlayout.addLayout(self.active_withdrew_layout)
+        
+
+    def withdraw_button_clicked(self):
+        auction_id = self.auction_id
+        success, message = self.root_widget.model.withdraw(auction_id)
+        if not success:
+            self.root_widget.display_message(message)
+        # self.root_widget.update()
+        
+
+    """ This function is called when we need to update the UI
+        with new auction_data
+    """
+    def update(self, auction_data):
+        self.auction_id = auction_data.id
+        self.seller_label.setText(auction_data.seller.username)
+        self.item_label.setText(auction_data.item.name)
+        self.current_price_label.setText(price_to_string(auction_data.current_price))
+        
+        self.buyers_list.clear()
+        for b in auction_data.buyers:
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
+
+        current_buyer = self.root_widget.data.username
+        if current_buyer in auction_data.buyers:
+            if auction_data.is_active(current_buyer) == True:
+                self.active_withdrew_layout.setCurrentWidget(self.active_widget)
+            else:
+                self.active_withdrew_layout.setCurrentWidget(self.withdrew_info)

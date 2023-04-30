@@ -67,13 +67,42 @@ class Test_1:
         new_auction = AuctionData(name = request["auction_name"],
                                   id = new_auction_id, 
                                   seller = UserData(request["seller_username"]),
-                                  item = ItemData(request["item_name"]), 
+                                  item = ItemData(name = request["item_name"], description = request["item_description"]), 
                                   base_price = request["base_price"],
                                   price_increment_period = request["price_increment_period"],
                                   increment = request["increment"])
         self.all_auctions[new_auction_id] = new_auction
         return True, "success"
     
+
+    def buyer_join_auction(self, request):
+        auction_id = request["auction_id"]
+        buyer_id = request["username"]
+        if auction_id not in self.all_auctions:
+            return False, "Auction does not exists"
+        auction = self.all_auctions[auction_id]
+        if auction.started == True:
+            return False, "Auction has started"
+        if auction.finished == True:
+            return False, "Auction has finished"
+        
+        auction.buyers[buyer_id] = True
+        return True, "Success"
+    
+    def buyer_quit_auction(self, request):
+        auction_id = request["auction_id"]
+        buyer_id = request["username"]
+        if auction_id not in self.all_auctions:
+            return False, "Auction does not exists"
+        auction = self.all_auctions[auction_id]
+        if auction.started == True:
+            return False, "Auction has started. Cannot "
+        if auction.finished == True:
+            return False, "Auction has finished"
+        if buyer_id in auction.buyers:
+            auction.buyers.pop(buyer_id)
+        return True, "Success"
+
 
     def find_address_from_server(self, username):
         if username == "seller_2":

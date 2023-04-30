@@ -7,8 +7,9 @@ class UserData():
         self.username = username     
 
 class ItemData():
-    def __init__(self, name=""):
+    def __init__(self, name = "", description = ""):
         self.name = name
+        self.description = description
         
 
 class AuctionData():
