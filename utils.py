@@ -53,44 +53,48 @@ class AuctionData():
         self.buyers = {}
     
 
-    """ Return whether buyer [username] is active in this auction.
-    """
+    
     def is_active(self, username):
+        """ Return whether buyer [username] is active in this auction. """
         if username not in self.buyers:
             return False
         return self.buyers[username]
 
-    """ Return the number of buyers that are active in this auction 
-        (can be used to check whether this auction is finished.)
-    """
+    
     def n_active_buyers(self):
+        """ Return the number of buyers that are active in this auction. 
+        (Can be used to check whether this auction is finished.)
+        """
         active = 0
         for b in self.buyers:
             if self.is_active(b):
                 active += 1
         return active
     
-    """ Withdraw buyer [username] from the auction.
-        Return False if the buyer is not in the auction
-    """
+    
     def withdraw(self, username):
+        """ Withdraw buyer [username] from the auction.
+            Return False if the buyer is not in the auction
+        """
         if username not in self.buyers:
             return False
         self.buyers[username] = False
         return True
     
-    """ Update the status of buyers in this auction
-        - Input: a repeated pb2.BuyerStatus object
-    """
+    
     def update_buyer_status(self, buyer_status):
+        """ Update the status of buyers in this auction
+            - Input: a repeated pb2.BuyerStatus object
+        """
         self.buyers = {}
         for x in buyer_status:
             self.buyers[x.username] = x.active
     
-    """ Return the username of the winner of the auction,
-        None if no winner
-    """
+
     def get_winner(self):
+        """ Return the username of the winner of the auction,
+            None if no winner
+        """
         for buyer in self.buyers:
             if self.is_active(buyer):
                 return buyer
@@ -101,12 +105,14 @@ def price_to_string(price):
     return "${:.2f}".format(price / 100)
 
 
-""" Given a stirng s, try to convert it to a number,
-    and check whether it is in the given range [lb, ub].
-    Will return successful or not and error message. 
-    - Return: ( valid : bool,  number : float,  message : str )
-"""
+
 def string_to_number_and_check_range(s, lb, ub):
+    """ Convert string s to a number and check whether it is in range [lb, ub].
+    Will return successful or not and error message.
+
+    - Input: (s : str,  lb : lower bound (float) ,  ub : upper bound (float))
+    - Return: ( valid : bool,  number : float,  message : str )
+    """
     try:
         number = float(s)
     except:

@@ -1,8 +1,8 @@
 from utils import *
 
 class Test_1:
-    def get_all_auctions_from_server():
-        all_auctions = {}
+    def __init__(self):
+        self.all_auctions = {}
 
         buyer_1 = UserData("buyer_1")
         buyer_2 = UserData("buyer_2")
@@ -16,8 +16,6 @@ class Test_1:
             auction_name = f"auction_{i}"
             auction = AuctionData(auction_name, auction_id, seller, item, base_price)
             auction.increment = 1
-            
-            auction.joined = i >= 1
 
             if i == 1:
                 auction.seller = UserData("seller_1")
@@ -57,11 +55,27 @@ class Test_1:
                 auction.winner_username = "buyer_3"
                 auction.transaction_price = 99999
             
-            all_auctions[auction_id] = auction
-        return all_auctions
+            self.all_auctions[auction_id] = auction
 
 
-    def find_address_from_server(username):
+    def get_all_auctions(self):
+        return self.all_auctions
+    
+    
+    def create_auction(self, request):
+        new_auction_id = f"auction_id_{len(self.all_auctions)}"
+        new_auction = AuctionData(name = request["auction_name"],
+                                  id = new_auction_id, 
+                                  seller = UserData(request["seller_username"]),
+                                  item = ItemData(request["item_name"]), 
+                                  base_price = request["base_price"],
+                                  price_increment_period = request["price_increment_period"],
+                                  increment = request["increment"])
+        self.all_auctions[new_auction_id] = new_auction
+        return True, "success"
+    
+
+    def find_address_from_server(self, username):
         if username == "seller_2":
             return True, RPC_Address(ip="127.0.0.1", port="60000")
         elif username == "buyer_1":
@@ -69,3 +83,6 @@ class Test_1:
         elif username == "buyer_3":
             return True, RPC_Address(ip="127.0.0.1", port="60003")
         return False, None
+
+
+test_1 = Test_1()

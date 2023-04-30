@@ -69,7 +69,7 @@ class Seller(QObject):
     
 
     def get_all_auctions_from_server(self):
-        return test_toolkit.Test_1.get_all_auctions_from_server()
+        return test_toolkit.test_1.get_all_auctions()
     
     def create_auction(self):
         # new_auction = AuctionData(name="test auction", id="test_id_1", )
@@ -77,19 +77,21 @@ class Seller(QObject):
         pass
     
 
-    """ Perform the operation that a buyer withdraws from an auction: 
+    
+    def withdraw(self, auction_id, username):
+        """ Withdraw a buyer from an auction. 
+        
         - Input:
             - auction_id (str)  :  the id of the auction the buyer is withdrawing from
             - username   (str)  :  the username of the buyer
         - Output:
-            - success    (bool) :  whether the withdrawing operation is successful
+            - success    (bool) :  whether the withdrawing operation is successful or not
             - message    (str)  :  error message if not successful
         * Note:
             This function may be called by multiple threads simultaneously
             (e.g., called by the multi-threaded RPC servicer and when announce_price cannot reach this buyer).
-            Lock is needed to prevent race condition. 
-    """
-    def withdraw(self, auction_id, username):    
+            Lock is needed in the implementation. 
+        """ 
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
                 return False, f"This seller does not have auction {auction_id}"
@@ -134,12 +136,16 @@ class Seller(QObject):
         return success, message
     
 
-    """ Announce price to all buyers in auction [auction_id].
-        Bool parameter [requires_ack] specifies whether the seller requires acknowledgement from buyers. 
-        If requires_ack = True, then a buyer who does not acknowledge the price announcement will be withdrawn. 
-        (Note : this function may be called frequently if the price increment period increment is small.) 
-    """
     def announce_price_to_all(self, auction_id, requires_ack=True):
+        """ Announce price to all the buyers in auction [auction_id].
+
+        - Parameter:
+            - auction_id   (str) : the id of the auction
+            - requires_ack (bool): specifies whether the seller requires acknowledgement from buyers. 
+                 If requires_ack = True, then a buyer who does not acknowledge will be withdrawn. 
+            
+        * Note : this function may be called frequently if the price increment period increment is small. 
+        """
         # create an announce_price RPC request
         request = pb2.AnnouncePriceRequest()
         with self.data.lock:
@@ -192,15 +198,16 @@ class Seller(QObject):
         return True, response
     
 
-    """ Finish an auction and notify buyers: 
-        - Input:
-            - auction_id (str)  :  the id of the auction to finish
-        * Note:
-            This function may be called by multiple threads simultaneously
-            (e.g., called by the multi-threaded RPC servicer).
-            Lock is needed to prevent race condition. 
-    """
     def finish_auction(self, auction_id, has_winner=True):
+        """ Finish an auction and notify buyers. 
+            
+            - Input:
+                auction_id (str)  :  the id of the auction to finish
+            * Note:
+                This function may be called by multiple threads simultaneously
+                (e.g., called by the multi-threaded RPC servicer).
+                Lock is needed in the implementation. 
+        """
         print(f"Seller [{self.data.username}]: finishing [{auction_id}]")
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
@@ -266,15 +273,16 @@ class Seller(QObject):
                 response = stub.announce_price(request)
                 success = True
         except grpc.RpcError as e:
-            print(e)
+            logging.debug(e)
             return False, f"Cannot contact with buyer. Network error!"
         return success, response
     
 
-    """ A loop that continuously increases the price of acution [auction_id], 
-        used when the auction is started. 
-    """
+    
     def price_increment_loop(self, auction_id):
+        """ A loop that continuously increases the price of acution [auction_id], 
+            used when the auction is started. 
+        """
         while True:
             # Announce price to all buyers and update the seller's UI
             self.announce_price_to_all(auction_id)
@@ -295,10 +303,14 @@ class Seller(QObject):
                     break
     
 
-    """ Seller starts auction [auction_id],
-        Parameter [resume] indicates whether this auction is resumed from a previously started but paused auction
-    """
+   
     def start_auction(self, auction_id, resume=False):
+        """ Seller starts auction [auction_id].
+
+            Parameters:
+            - auction_id : the id of the auction to start. 
+            - resume     : indicates whether this auction is resumed from a previously started but paused auction. 
+        """
         # First, obtain the acution (buyer) information from the platform:
         # auction = test_toolkit.Test_1.get_auction_info(auction_id)
         auction = self.data.my_auctions[auction_id]
@@ -331,25 +343,37 @@ class Seller(QObject):
 
     def create_auction(self, auction_name, item_name, base_price, period, increment):
         print("Trying to create auction:", auction_name, item_name, base_price, period, increment)
-        return (False, "Create_auction funcion not impelemented. ")
+        request = {}
+        request["seller_username"] = self.data.username
+        request["auction_name"] = auction_name
+        request["item_name"] = item_name
+        request["base_price"] = base_price
+        request["price_increment_period"] = period
+        request["increment"] = increment
+        success, message = test_toolkit.test_1.create_auction(request)
+        # If create_auction does not succeed, return error message
+        if not success:
+            return success, message
+        # Otherwise, fetch auction data (including the newly created auction) from server
+        self.fetch_auctions_from_server()
+        return success, message
     
 
     def find_address_from_server(self, username):
-        return test_toolkit.Test_1.find_address_from_server(username)
+        return test_toolkit.test_1.find_address_from_server(username)
     
 
-    """ This function fetches all data (auctions & addresses) from the platform
-        to update the local data. 
-    """
+    
     def fetch_data_from_server(self):
+        """ Fetch all data (auctions & addresses) from the platform to update the local data. """
         # First, fetch all the auction data
         self.fetch_auctions_from_server()
         # Then, fetch the RPC addresses of all buyers
     
 
-    """ This function fetches all auction data from the platform to update the local data. 
-    """
+    
     def fetch_auctions_from_server(self):
+        """ Fetch all auction data from the platform to update the local data. """
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
         
         platform_auctions = self.get_all_auctions_from_server()
@@ -364,14 +388,12 @@ class Seller(QObject):
                     # For an auction that is in both platforms and seller's data, 
                     #  - If the auction is finished: replace the seller's data with the platform's:
                     if pa.finished:
-                        if DEBUG:
-                            print(id, "finished")
+                        logging.debug(f"{id} finished")
                         self.data.my_auctions[id] = pa
                         continue
                     #  - If the auction is not started and not finished: replace the seller's data with the platform's:  
                     elif not pa.started:
-                        if DEBUG:
-                            print(id, "not started")
+                        logging.debug(f"{id} not started")
                         self.data.my_auctions[id] = pa
                         continue 
                     #  - Otherwise, the auction is started and not finished:
@@ -381,7 +403,7 @@ class Seller(QObject):
                 else:
                     # For an auction that is in the platform's data but in the seller's, 
                     # add this auction to the seller's auction list
-                    if DEBUG: print(id, "new auction")
+                    logging.debug("{id} new auction")
                     self.data.my_auctions[id] = pa
                     auction_list_needs_update = True
                     # If this auction has started, set "resume = True" so that the UI will show a "resume" button
@@ -396,11 +418,12 @@ class Seller(QObject):
             self.ui_update_auctions_signal.emit() 
 
 
-""" The RPC servicer on a seller client: provides RPC services to a buyer.
-    * Note:
-        The RPC services are multi-threaded.
-"""
+
 class Seller_RPC_Servicer(auction_pb2_grpc.SellerServiceServicer):
+    """ The RPC servicer on a seller client: provides RPC services to a buyer.
+    
+        * Note: The RPC services are multi-threaded.
+    """
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
@@ -469,8 +492,8 @@ class SellerUI(QWidget):
         mainlayout.addLayout(column_2)
     
 
-    """ When user clicks an auction in the auction list, do the following: """
     def auction_list_clicked(self):
+        """ UI: handle user clicking an auction in the auction list """
         selected_row = self.auction_list_widget.currentRow()
         # records which auction is selected by the user
         self.selected_auction = self.auction_id_list[selected_row]
@@ -508,16 +531,22 @@ class SellerUI(QWidget):
             self.setLayout(mainlayout)
         
         def ok_button_clicked(self):
-            # Read user's input and check
+            # Read user's input and check whether the input is valid
             auction_name = self.auction_name_LE.text()
-            if len(auction_name) > 1000:
+            if len(auction_name) > 1000: 
                 QMessageBox.critical(self, "", "Auction name is too long!")
+                return
+            if auction_name == "":
+                QMessageBox.critical(self, "", "Auction name cannot be empty!")
                 return
             
             item_name = self.item_name_LE.text()
             if len(item_name) > 10000:
                 QMessageBox.critical(self, "", "Item name is too long!")
                 return
+            if item_name == "":
+                QMessageBox.critical(self, "", "Item name cannot be empty!")
+                return 
             
             (valid, base_price, error_message) = utils.string_to_number_and_check_range(self.base_price_LE.text(), lb=0, ub=1000000)
             if not valid:
@@ -539,7 +568,9 @@ class SellerUI(QWidget):
             (success, message) = self.model.create_auction(auction_name, item_name, base_price, period_in_ms, increment)
             if not success:
                 QMessageBox.critical(self, "", message)
-            print(" XXXXXXX Need to update UI here???? ")
+            else:
+                QMessageBox.information(self, "", "Auction created successfully.")
+                self.close()
             return 
 
 

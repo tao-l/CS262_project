@@ -44,15 +44,15 @@ if __name__ == "__main__":
     app = QApplication([])
     window = QMainWindow()
 
-    buyer_1 = Buyer("buyer_1", utils.RPC_Address("127.0.0.1", "60001"))
-    buyer_1.ui.show()
+    # buyer_1 = Buyer("buyer_1", utils.RPC_Address("127.0.0.1", "60001"))
+    # buyer_1.ui.show()
 
-    buyer_3 = Buyer("buyer_3", utils.RPC_Address("127.0.0.1", "60003"))
-    buyer_3.ui.show()
+    # buyer_3 = Buyer("buyer_3", utils.RPC_Address("127.0.0.1", "60003"))
+    # buyer_3.ui.show()
 
     seller = Seller("seller_2", utils.RPC_Address("127.0.0.1", "60000"))
     seller.ui.show()
     
-    threading.Thread(target=test_handle_announce_price, args=(buyer_1,), daemon=True).start()
+    # threading.Thread(target=test_handle_announce_price, args=(buyer_1,), daemon=True).start()
 
     app.exec()
