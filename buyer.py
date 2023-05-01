@@ -35,7 +35,8 @@ class Data():
 
 
 class Buyer(QObject):
-    ui_update_signal = pyqtSignal()
+    ui_update_all_signal = pyqtSignal()
+    ui_update_auctions_signal = pyqtSignal()
 
     def __init__(self, username, rpc_address):
         super().__init__()
@@ -45,7 +46,8 @@ class Buyer(QObject):
         self.data.auctions = self.get_all_auctions_from_server()
 
         self.ui = BuyerUI(self)
-        self.ui_update_signal.connect(lambda : self.ui.update(self.data))
+        self.ui_update_all_signal.connect(lambda : self.ui.update_all(self.data))
+        self.ui_update_auctions_signal.connect(lambda : self.ui.update_all(self.data))
 
         # Start buyer's RPC service 
         self.rpc = Buyer_RPC_Servicer(self)
@@ -58,8 +60,46 @@ class Buyer(QObject):
 
         # Finally, update UI (by emitting signal to notify the UI component)
         self.ui_update_signal.emit()
-
     
+
+    def fetch_auctions_from_server(self):
+        """ Fetch all auctions from the platform to update the local data. """
+        auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
+        platform_auctions = self.get_all_auctions_from_server()
+        
+        for (id, pa) in platform_auctions.items():
+            with self.data.lock:
+                if id in self.data.auctions:
+                    # For an auction that is in both platforms and buyer's data, 
+                    #  - If the auction is finished: replace the buyer's data with the platform's:
+                    if pa.finished:
+                        logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: finished")
+                        self.data.my_auctions[id] = pa
+                        continue
+                    #  - If the auction is not started and not finished: replace the buyer's data with the platform's:  
+                    elif not pa.started:
+                        logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: not started")
+                        self.data.my_auctions[id] = pa
+                        continue 
+                    #  - Otherwise, the auction is started and not finished:
+                    #    Do not change the buyer's data because the auction is taken cared of by the seller now
+                    else:
+                        continue
+                else:
+                    # For an auction that is in the platform's data but in the buyer's, 
+                    # add this auction to the buyer's auction list
+                    logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: new auction")
+                    self.data.my_auctions[id] = pa
+                    auction_list_needs_update = True
+        
+        # If the auction lists needs to update, update the entire UI, 
+        if auction_list_needs_update:
+            self.ui_update_all_signal.emit()
+        else:
+        # Otherwise, just update the auction part of the UI. 
+            self.ui_update_auctions_signal.emit() 
+    
+
     def handle_announce_price(self, request):
         auction_id = request.auction_id
         round_id = request.round_id
@@ -104,7 +144,7 @@ class Buyer(QObject):
         winner_username = request.winner_username
         transaction_price = request.price
         buyer_status = request.buyer_status
-        logging.debug(f"Buyer {self.data.username} receives finish_auction RPC, auction = {auction_id}")
+        logging.info(f"Buyer {self.data.username} receives finish_auction RPC, auction = {auction_id}")
         
         # Acquire lock before modifying the data
         with self.data.lock:
@@ -234,7 +274,7 @@ class Buyer_RPC_Servicer(auction_pb2_grpc.BuyerServiceServicer):
 BOLD = QFont()
 BOLD.setBold(True)
 
-class Join_Auction_Page(QWidget):
+class Join_Auction_Page_old(QWidget):
     def __init__(self, root_widget):
         super().__init__()
         self.root_widget = root_widget
@@ -297,7 +337,7 @@ class Join_Auction_Page(QWidget):
         self.increment_description.setText(increment_message)
 
 
-class Auction_Started_Page(QWidget):
+class Auction_Started_Page_old(QWidget):
     def __init__(self, root_widget):
         super().__init__()
         self.root_widget = root_widget
@@ -384,7 +424,7 @@ class Auction_Started_Page(QWidget):
                 self.active_withdrew_layout.setCurrentWidget(self.withdrew_info)
 
 
-class Auction_Finished_Page(QWidget):
+class Auction_Finished_Page_old(QWidget):
     def __init__(self, root_widget):
         super().__init__()
         self.root_widget = root_widget
@@ -435,7 +475,7 @@ class Auction_Finished_Page(QWidget):
         self.price_label.setText(price_to_string(auction_data.transaction_price))
 
 
-class BuyerUI(QWidget):
+class BuyerUI_old(QWidget):
     def __init__(self, model):
         super().__init__()
         self.model = model
@@ -494,7 +534,7 @@ class BuyerUI(QWidget):
             if a.started == False and a.finished == False:
                 w = Auction_Prestarted_Page(self, a)
             elif a.started == True and a.finished == False:
-                w = Auction_Started_Page_new(self, a)
+                w = Auction_Started_Page(self, a)
             
             self.stacked_layout.addWidget(w)
 
@@ -538,6 +578,100 @@ class BuyerUI(QWidget):
         QMessageBox.critical(self, "", message)
 
 
+class BuyerUI(QWidget):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        self.data = None
+
+        # record the id of auction selected by the user, namely, the auction to display on screen
+        self.selected_auction = None
+
+        mainlayout = QHBoxLayout()
+        self.setLayout(mainlayout)
+
+        column_1 = QVBoxLayout()
+        
+        self.username_label = QLabel()
+        self.username_label.setFont(BOLD)
+        column_1.addWidget(self.username_label)
+        column_1.addWidget(QLabel("logged in as buyers.\n"))
+
+        column_1.addWidget(QLabel("Auctions on the platform:"))
+        self.auction_list_widget = QListWidget()
+        self.auction_list_widget.itemClicked.connect(self.auction_list_clicked)
+        column_1.addWidget(self.auction_list_widget)
+        self.auction_id_list = []   # record the id of the auctions in the list
+        mainlayout.addLayout(column_1)
+
+        column_2 = QVBoxLayout()
+        self.auction_box = QGroupBox()
+        self.stacked_layout = QStackedLayout()
+        self.empty_page = QWidget()
+        self.stacked_layout.addWidget(self.empty_page)
+        self.stacked_layout.setCurrentWidget(self.empty_page)
+        self.auction_box.setLayout(self.stacked_layout)
+        column_2.addWidget(self.auction_box)
+
+        mainlayout.addLayout(column_2)
+    
+
+    def auction_list_clicked(self):
+        """ UI: handle user clicking an auction in the auction list """
+        selected_row = self.auction_list_widget.currentRow()
+        # records which auction is selected by the user
+        self.selected_auction = self.auction_id_list[selected_row]
+        # then display the selected auction
+        self.update_displayed_auction()
+
+    
+    """ Update the UI of the auction displayed on screen """
+    def update_displayed_auction(self):
+        w = self.empty_page
+        if (self.data != None) and (self.selected_auction in self.data.auctions):
+            # get the data of the selected auction
+            a = self.data.auctions[self.selected_auction]
+            # create a new page based on auction status
+            if a.finished == True:
+                # w = Auction_finished_Page(self, a)
+                pass 
+            elif a.started == False:
+                w = Auction_Prestarted_Page(self, a)
+            else:
+                w = Auction_Started_Page(self, a)
+        # remove the current page and add the new page
+        self.stacked_layout.removeWidget(self.stacked_layout.currentWidget())
+        self.stacked_layout.addWidget(w)
+        self.stacked_layout.setCurrentWidget(w)
+    
+    
+    def update_all(self, data=None):
+        """ Updates the entire UI, using the given new data """
+        if data == None:
+            data = self.model.data
+        
+        self.data = data
+        self.username_label.setText(data.username)
+        self.update_auction_list()
+        self.update_auctions()
+    
+
+    def update_auction_list(self):
+        """ This function only updates the auction list, given new auctions data """
+        self.auction_list_widget.clear()
+        self.auction_id_list = []
+        for (auction_id, a) in self.data.auctions.items():
+            self.auction_list_widget.addItem(a.name)
+            self.auction_id_list.append(auction_id)
+    
+
+    def update_auctions(self):
+        """ This function only updates the auction page UI, given new auctions data """
+        self.update_displayed_auction()
+    
+
+    def display_message(self, message):
+        QMessageBox.critical(self, "", message)
 
 
 class Auction_Page_Base(QWidget):
@@ -627,7 +761,7 @@ class Auction_Prestarted_Page(Auction_Page_Base):
             QMessageBox.critical(self, "", message)
         
 
-class Auction_Started_Page_new(Auction_Page_Base):
+class Auction_Started_Page(Auction_Page_Base):
     def __init__(self, root_widget, auction_data):
         super().__init__(root_widget, auction_data)
         self.mainlayout.addWidget(QLabel("Auction has started."))

@@ -394,10 +394,9 @@ class Seller(QObject):
         self.fetch_auctions_from_server()
         # Then, fetch the RPC addresses of all buyers
     
-
     
     def fetch_auctions_from_server(self):
-        """ Fetch all auction data from the platform to update the local data. """
+        """ Fetch all the auctions of this seller from the platform to update the local data. """
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
         # print(f"Before fetching auctions from server", self.data.my_auctions)
         platform_auctions = self.get_all_auctions_from_server()
