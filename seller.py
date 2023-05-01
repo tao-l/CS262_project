@@ -56,13 +56,12 @@ class Seller(QObject):
         rpc_server.add_insecure_port(rpc_address.ip + ":" + rpc_address.port)
         rpc_server.start()
         threading.Thread(target=rpc_server.wait_for_termination, daemon=True).start()
-        print("Seller RPC server started.")
+        print("Seller RPC server started at", rpc_address.ip + ":" + rpc_address.port)
 
         def data_fetch_loop():
             while True:
                 self.fetch_auctions_from_server()
                 time.sleep(1)
-                break
         threading.Thread(target=data_fetch_loop, daemon=True).start()
 
         # Finally, update UI (by emitting signal to notify the UI component)
@@ -93,7 +92,7 @@ class Seller(QObject):
             (e.g., called by the multi-threaded RPC servicer and when announce_price cannot reach this buyer).
             Lock is needed in the implementation. 
         """ 
-        print(f"  Withdraw", auction_id, username, " starts", self.data.my_auctions[auction_id].buyers)
+        logging.info(f" Seller {self.data.username}: tries to withdraw {username} from  {auction_id}")
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
                 return False, f"This seller does not have this auction."
@@ -131,11 +130,10 @@ class Seller(QObject):
                              daemon = True).start()
         
         # Notify all buyers that a buyer has withdrawn, using the announce_price function
-        print(f" Seller: tried to withdraw [{username}] from auction [{auction_id}], succees = {success}. \n    Notifying all buyers...")
+        logging.info(f" Seller {self.data.username}: tried to withdraw [{username}] from auction [{auction_id}], succees = {success}. \n    Notifying all buyers...")
         print(f"                    After withdrawing, ", self.data.my_auctions[auction_id].buyers)
         self.announce_price_to_all(auction_id, requires_ack=False)
-
-        print(f"                    After annouce_price_to_all, ", self.data.my_auctions[auction_id].buyers)
+        print(f"                    After announce_price_to_all, ", self.data.my_auctions[auction_id].buyers)
         
 
         # At this point, the withdrawing operation is completed.
@@ -171,7 +169,8 @@ class Seller(QObject):
             #     request.buyer_status.append(
             #             pb2.BuyerStatus(username=b, active=auction.is_active(b))
             #         )
-            print(f"Annouce-price request:   {auction_id}, {request.buyer_status}")
+        
+        logging.debug(f" Annouce-price request:   {auction_id}, {request.buyer_status}")
         
         # # broadcast the request to all buyers in the auction
         # for b in auction.buyers:
@@ -400,10 +399,7 @@ class Seller(QObject):
     def fetch_auctions_from_server(self):
         """ Fetch all auction data from the platform to update the local data. """
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
-        
-        if "auction_id_5" in self.data.my_auctions:
-            print(f"Before fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
-
+        # print(f"Before fetching auctions from server", self.data.my_auctions)
         platform_auctions = self.get_all_auctions_from_server()
         
         for (id, pa) in platform_auctions.items():
@@ -416,12 +412,12 @@ class Seller(QObject):
                     # For an auction that is in both platforms and seller's data, 
                     #  - If the auction is finished: replace the seller's data with the platform's:
                     if pa.finished:
-                        logging.debug(f"{id} finished")
+                        logging.debug(f" Fetch: update {id}: finished")
                         self.data.my_auctions[id] = pa
                         continue
                     #  - If the auction is not started and not finished: replace the seller's data with the platform's:  
                     elif not pa.started:
-                        logging.debug(f"{id} not started")
+                        logging.debug(f" Fetch: update {id}: not started")
                         self.data.my_auctions[id] = pa
                         continue 
                     #  - Otherwise, the auction is started and not finished:
@@ -431,14 +427,14 @@ class Seller(QObject):
                 else:
                     # For an auction that is in the platform's data but in the seller's, 
                     # add this auction to the seller's auction list
-                    logging.debug("{id} new auction")
+                    logging.debug(f" Fetch: update {id}: new auction")
                     self.data.my_auctions[id] = pa
                     auction_list_needs_update = True
                     # If this auction has started, set "resume = True" so that the UI will show a "resume" button
                     if pa.started:
                         pa.resume = True
         
-        print(f"After fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
+        # print(f"After fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
         # If the auction lists needs to update, update the entire UI, 
         if auction_list_needs_update:
             self.ui_update_all_signal.emit()
@@ -796,7 +792,7 @@ class Auction_Started_Page(QWidget):
 
         self.buyers_list.clear()
         for b in auction_data.buyers:
-            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdraw"
             self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
 
 
@@ -862,7 +858,7 @@ class Auction_Resume_Page(QWidget):
 
         self.buyers_list.clear()
         for b in auction_data.buyers:
-            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrawn"
             self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
 
 

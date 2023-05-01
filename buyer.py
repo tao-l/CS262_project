@@ -136,12 +136,12 @@ class Buyer(QObject):
         if not success:
             return success, "Cannot join this auction"
         self.ui_update_signal.emit()
-
+        logging.info(f" Buyer {self.data.username} tries to join from auction {auction_id}: success")
         return success, "success"
     
 
     def quit_auction(self, auction_id):
-        logging.info(f"Buyer {self.data.username} tries to quit from auction {auction_id}")
+        logging.info(f" Buyer {self.data.username} tries to quit from auction {auction_id}")
         request = {}
         request["op"] = "BUYER_QUIT_AUCTION"
         request["username"] = self.data.username
@@ -150,7 +150,6 @@ class Buyer(QObject):
         if not success:
             return success, "Cannot quit from this auction"
         self.ui_update_signal.emit()
-
         return success, "success"
     
 
@@ -570,6 +569,18 @@ class Auction_Page_Base(QWidget):
         seller_item_form.addRow(QLabel("Description:"), item_description_label)
         self.mainlayout.addLayout(seller_item_form)
 
+    def make_buyer_list(self, auction_data):
+        """ Make a list of buyers, including their active/withdraw status, from auciont_data """
+        buyer_list = QListWidget()
+        for b in auction_data.buyers:
+            item = QListWidgetItem(b)
+            if auction_data.is_active(b):
+                item = QListWidgetItem(b + " : " + "active")
+                item.setForeground(Qt.GlobalColor.red)
+            else:
+                item = QListWidgetItem(b + " : " + "withdrawn")
+            buyer_list.addItem(item)
+        return buyer_list
 
 # class Price_Increment_Label(QLabel):
 #         def __init__(self): 
@@ -584,6 +595,12 @@ class Auction_Prestarted_Page(Auction_Page_Base):
         seconds = auction_data.price_increment_period / 1000
         increment_message = f"Once started, the price will increase by {price_to_string(auction_data.increment)} every {seconds} seconds."
         self.mainlayout.addWidget(QLabel(increment_message))
+
+        buyers_view = QVBoxLayout()
+        buyers_view.addWidget(QLabel("Current buyers in the auction:"))
+        self.buyers_list = self.make_buyer_list(auction_data)
+        buyers_view.addWidget(self.buyers_list)
+        self.mainlayout.addLayout(buyers_view)
 
         if self.root_widget.data.username not in auction_data.buyers:
             self.mainlayout.addWidget(QLabel("Do you want to join this auction? "))
@@ -649,20 +666,6 @@ class Auction_Started_Page_new(Auction_Page_Base):
         self.withdraw_button = QPushButton("Withdraw")
         self.withdraw_button.clicked.connect(self.withdraw_button_clicked)
         self.mainlayout.addWidget(self.withdraw_button)
-    
-    
-    def make_buyer_list(self, auction_data):
-        """ Make a list of buyers, including their active/withdraw status, from auciont_data """
-        buyer_list = QListWidget()
-        for b in auction_data.buyers:
-            item = QListWidgetItem(b)
-            if auction_data.is_active(b):
-                item = QListWidgetItem(b + " : " + "active")
-                item.setForeground(Qt.GlobalColor.red)
-            else:
-                item = QListWidgetItem(b + " : " + "withdrawn")
-            buyer_list.addItem(item)
-        return buyer_list
 
     def withdraw_button_clicked(self):
         """ UI: handle the case that the user clickes the withdraw button """

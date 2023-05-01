@@ -1,4 +1,5 @@
 from utils import *
+import copy
 
 class Test_1:
     def __init__(self):
@@ -8,7 +9,7 @@ class Test_1:
         buyer_2 = UserData("buyer_2")
         buyer_3 = UserData("buyer_3")
 
-        for i in range(5, 6):
+        for i in range(7):
             seller = UserData(f"seller_{i}")
             item = ItemData(f"item_{i}")
             base_price = i
@@ -59,7 +60,7 @@ class Test_1:
 
 
     def get_all_auctions(self):
-        return self.all_auctions
+        return copy.deepcopy(self.all_auctions)
     
     
     def create_auction(self, request):
