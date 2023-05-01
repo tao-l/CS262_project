@@ -146,7 +146,7 @@ class Seller(QObject):
         return success, message
     
 
-    def announce_price_to_all(self, auction_id, requires_ack=True):
+    def announce_price_to_all(self, auction_id, requires_ack):
         """ Announce price to all the buyers in auction [auction_id].
 
         - Parameter:
@@ -166,11 +166,11 @@ class Seller(QObject):
             request.auction_id = auction_id
             request.round_id = auction.round_id
             request.price = auction.current_price
-            # request.buyer_status.extend( auction.get_buyer_status_list() )
-            for b in auction.buyers:
-                request.buyer_status.append(
-                        pb2.BuyerStatus(username=b, active=auction.is_active(b))
-                    )
+            request.buyer_status.extend( auction.get_buyer_status_list() )
+            # for b in auction.buyers:
+            #     request.buyer_status.append(
+            #             pb2.BuyerStatus(username=b, active=auction.is_active(b))
+            #         )
             print(f"Annouce-price request:   {auction_id}, {request.buyer_status}")
         
         # # broadcast the request to all buyers in the auction
@@ -181,16 +181,21 @@ class Seller(QObject):
 
         # Broadcast the request to all buyers in the auction. 
         for b in auction.buyers:
-            print(f"Announce_price sending to {b}...")
-            success, response = self.RPC_to_buyer("announce_price", request, b)
-            print(f"Announce_price for {b} success = {success}")
+            threading.Thread(target = self.announce_price_to_buyer, 
+                             args   = (auction_id, request, b, requires_ack),
+                             daemon = True).start()
+    
+
+    def announce_price_to_buyer(self, auction_id, request, buyer, requires_ack):
+        logging.info(f"Announce_price sending to {buyer},  requiring ack = {requires_ack}...")
+        success, response = self.RPC_to_buyer("announce_price", request, buyer)
+        logging.info(f"Announce_price for {buyer} success = {success}")
+        if requires_ack:
+            # if requires acknowlegement, 
+            # then a buyer who does not acknowledge the request is withdrawn 
             if not success:
-                print(f"        error message ={response}")
-            if requires_ack:
-                # if requires acknowlegement, 
-                # then a buyer who does not acknowledge the request is withdrawn 
-                if not success:
-                    self.withdraw(auction_id, b)
+                logging.info(f"  Withdrawing {buyer}")
+                self.withdraw(auction_id, buyer)
     
 
     def RPC_to_buyer(self, rpc_name, request, buyer):
@@ -300,7 +305,7 @@ class Seller(QObject):
         """
         while True:
             # Announce price to all buyers and update the seller's UI
-            self.announce_price_to_all(auction_id)
+            self.announce_price_to_all(auction_id, requires_ack=True)
             self.ui_update_auctions_signal.emit()
 
             # get the price increment period and sleep for that period
@@ -734,7 +739,7 @@ class Auction_Starting_Page(QWidget):
 
         self.buyers_list.clear()
         for b in auction_data.buyers:
-            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrawn"
             self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
 
 
