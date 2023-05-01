@@ -62,6 +62,7 @@ class Seller(QObject):
             while True:
                 self.fetch_auctions_from_server()
                 time.sleep(1)
+                break
         threading.Thread(target=data_fetch_loop, daemon=True).start()
 
         # Finally, update UI (by emitting signal to notify the UI component)
@@ -92,12 +93,17 @@ class Seller(QObject):
             (e.g., called by the multi-threaded RPC servicer and when announce_price cannot reach this buyer).
             Lock is needed in the implementation. 
         """ 
+        print(f"  Withdraw", auction_id, username, " starts", self.data.my_auctions[auction_id].buyers)
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
-                return False, f"This seller does not have auction {auction_id}"
+                return False, f"This seller does not have this auction."
             auction = self.data.my_auctions[auction_id]
             if username not in auction.buyers:
-                return False, f"Buyer {username} did not join this auction ({auction_id})"
+                return False, f"Buyer {username} did not join this auction."
+            if auction.finished:
+                return False, f"This auction has finished."
+            if auction.started == False:
+                return False, f"This auction has not started."
             
             # If the buyer already withdrew previously, simply return success message
             if auction.is_active(username) == False:
@@ -108,7 +114,7 @@ class Seller(QObject):
             # then this buyer should be the winner and cannot withdraw.  
             if auction.n_active_buyers() == 1:
                 # print(f"Buyer {username} cannot withdraw because it is the only buyer left. ")
-                success, message = False, f"Cannot withdraw!\n Because you are the only active buyer (winner) in the auction."
+                success, message = False, f"Cannot withdraw!\nBecause you are the only active buyer (winner) in the auction."
             else: 
             # Otherwise, we can withdraw the buyer from the auction
                 auction.withdraw(username)
@@ -125,8 +131,12 @@ class Seller(QObject):
                              daemon = True).start()
         
         # Notify all buyers that a buyer has withdrawn, using the announce_price function
-        print(f"Seller: tried to withdraw [{username}] from auction [{auction_id}], succees = {success}. \n  Notifying all buyers...")
+        print(f" Seller: tried to withdraw [{username}] from auction [{auction_id}], succees = {success}. \n    Notifying all buyers...")
+        print(f"                    After withdrawing, ", self.data.my_auctions[auction_id].buyers)
         self.announce_price_to_all(auction_id, requires_ack=False)
+
+        print(f"                    After annouce_price_to_all, ", self.data.my_auctions[auction_id].buyers)
+        
 
         # At this point, the withdrawing operation is completed.
         # The seller's UI needs to be updated. 
@@ -156,10 +166,12 @@ class Seller(QObject):
             request.auction_id = auction_id
             request.round_id = auction.round_id
             request.price = auction.current_price
+            # request.buyer_status.extend( auction.get_buyer_status_list() )
             for b in auction.buyers:
                 request.buyer_status.append(
                         pb2.BuyerStatus(username=b, active=auction.is_active(b))
                     )
+            print(f"Annouce-price request:   {auction_id}, {request.buyer_status}")
         
         # # broadcast the request to all buyers in the auction
         # for b in auction.buyers:
@@ -169,9 +181,11 @@ class Seller(QObject):
 
         # Broadcast the request to all buyers in the auction. 
         for b in auction.buyers:
-            print(f"Announce_price sent to {b}")
+            print(f"Announce_price sending to {b}...")
             success, response = self.RPC_to_buyer("announce_price", request, b)
             print(f"Announce_price for {b} success = {success}")
+            if not success:
+                print(f"        error message ={response}")
             if requires_ack:
                 # if requires acknowlegement, 
                 # then a buyer who does not acknowledge the request is withdrawn 
@@ -194,6 +208,7 @@ class Seller(QObject):
             else:
                 raise Exception(f"RPC {rpc_name} not supported")
         except grpc.RpcError as e:
+            # logging.debug(e)
             return False, "RPC error"
         return True, response
     
@@ -311,6 +326,8 @@ class Seller(QObject):
             - auction_id (str)  : the id of the auction to start. 
             - resume     (bool) : indicates whether this auction is resumed from a previously started but paused auction. 
         """
+        test_toolkit.test_1.all_auctions[auction_id].started = True
+        
         # First, obtain the acution (buyer) information from the platform:
         # auction = test_toolkit.Test_1.get_auction_info(auction_id)
         auction = self.data.my_auctions[auction_id]
@@ -379,6 +396,9 @@ class Seller(QObject):
         """ Fetch all auction data from the platform to update the local data. """
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
         
+        if "auction_id_5" in self.data.my_auctions:
+            print(f"Before fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
+
         platform_auctions = self.get_all_auctions_from_server()
         
         for (id, pa) in platform_auctions.items():
@@ -413,6 +433,7 @@ class Seller(QObject):
                     if pa.started:
                         pa.resume = True
         
+        print(f"After fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
         # If the auction lists needs to update, update the entire UI, 
         if auction_list_needs_update:
             self.ui_update_all_signal.emit()
@@ -438,7 +459,7 @@ class Seller_RPC_Servicer(auction_pb2_grpc.SellerServiceServicer):
         logging.debug(f"Seller received RPC: withdraw ( {auction_id}, {buyer_username} )")
         # call the parent object's withdraw() function to perform the operation
         success, message = self.parent.withdraw(auction_id, buyer_username)
-        logging.debug(f"     RPC response: success = {success}, message = {message}")
+        logging.debug(f"   RPC response : withdraw ( {auction_id}, {buyer_username} ), success = {success}, message = {message}")
         return pb2.SuccessMessage(success=success, message=message)
 
 

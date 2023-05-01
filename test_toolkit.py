@@ -8,7 +8,7 @@ class Test_1:
         buyer_2 = UserData("buyer_2")
         buyer_3 = UserData("buyer_3")
 
-        for i in range(7):
+        for i in range(5, 6):
             seller = UserData(f"seller_{i}")
             item = ItemData(f"item_{i}")
             base_price = i

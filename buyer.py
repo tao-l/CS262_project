@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QStackedLayout, QFormLayout, QGroupBox
-from PyQt6.QtWidgets import QListWidget, QLabel, QPushButton, QMessageBox, QTableWidget
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QLabel, QPushButton, QMessageBox, QTableWidget
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, QObject, Qt
 
@@ -65,7 +65,7 @@ class Buyer(QObject):
         round_id = request.round_id
         price = request.price
         buyer_status = request.buyer_status
-        # print(f"{self.data.username} receives annouce_price [{auction_id}], price=[{price}]")
+        print(f"{self.data.username} receives annouce_price [{auction_id}], price=[{price}]")
 
         # Acquire lock before modifying data
         with self.data.lock:
@@ -441,6 +441,7 @@ class BuyerUI(QWidget):
         super().__init__()
         self.model = model
         self.data = None
+        self.username = model.data.username
 
         # record the auction selected by the user, namely, the auction to display on screen
         self.selected_auction = None
@@ -493,6 +494,8 @@ class BuyerUI(QWidget):
 
             if a.started == False and a.finished == False:
                 w = Auction_Prestarted_Page(self, a)
+            elif a.started == True and a.finished == False:
+                w = Auction_Started_Page_new(self, a)
             
             self.stacked_layout.addWidget(w)
 
@@ -518,6 +521,7 @@ class BuyerUI(QWidget):
         Input: the new data. 
     """
     def update(self, data=None):
+        # print(f"Buyer {self.username} UI update is called.")
         if data == None:
             data = self.model.data
         
@@ -604,66 +608,65 @@ class Auction_Prestarted_Page(Auction_Page_Base):
         success, message = self.root_widget.model.quit_auction(auction_id)
         if not success:
             QMessageBox.critical(self, "", message)
-
-        # mainlayout.addWidget(QLabel("Auction has started."))
-
-        # price_row = QHBoxLayout()
-        # price_row.addWidget(QLabel("Current price: "))
-        # self.current_price_label = QLabel()
-        # self.current_price_label.setFont(BOLD)
-        # price_row.addWidget(self.current_price_label)
-        # mainlayout.addLayout(price_row)
-
-        # buyers_view = QVBoxLayout()
-        # buyers_view.addWidget(QLabel("Current buyers:"))
-        # self.buyers_list = QListWidget()
-        # buyers_view.addWidget(self.buyers_list)
-        # mainlayout.addLayout(buyers_view)
-
-
-        # self.active_widget = QWidget()
-        # active_layout = QVBoxLayout()
-        # active_layout.addWidget(QLabel("\nDo you want to withdraw from the auction?\n(Once withdrawn, you cannot re-join the auction.)"))
-        # self.withdraw_button = QPushButton("Withdraw")
-        # self.withdraw_button.clicked.connect(self.withdraw_button_clicked)
-        # active_layout.addWidget(self.withdraw_button)
-        # self.active_widget.setLayout(active_layout)
-
-        # self.withdrew_info = QLabel("\nYou have withdrawn from the auction.\nCannot re-join.")
-
-        # self.active_withdrew_layout = QStackedLayout()
-        # self.active_withdrew_layout.addWidget(self.active_widget)
-        # self.active_withdrew_layout.addWidget(self.withdrew_info)
-        # self.active_withdrew_layout.setCurrentWidget(self.active_widget)
-
-        # mainlayout.addLayout(self.active_withdrew_layout)
         
 
+class Auction_Started_Page_new(Auction_Page_Base):
+    def __init__(self, root_widget, auction_data):
+        super().__init__(root_widget, auction_data)
+        self.mainlayout.addWidget(QLabel("Auction has started."))
+
+        # If this buyer does not join this auction. Do not show any information.
+        if self.root_widget.username not in auction_data.buyers:
+            self.mainlayout.addWidget(QLabel("You did not join this auction, so cannot see other information of this auction."))
+            return
+        
+        # Otherwise (the buyer joined the auction), show the current price and the status of participating buyers.
+        price_row = QHBoxLayout()
+        price_row.addWidget(QLabel("Current price: "))
+        self.current_price_label = QLabel(price_to_string(auction_data.current_price))
+        self.current_price_label.setFont(BOLD)
+        price_row.addWidget(self.current_price_label)
+        self.mainlayout.addLayout(price_row)
+
+        seconds = auction_data.price_increment_period / 1000
+        increment_message = f"The price is increasing by {price_to_string(auction_data.increment)} every {seconds} seconds."
+        self.mainlayout.addWidget(QLabel(increment_message))
+
+        buyers_view = QVBoxLayout()
+        buyers_view.addWidget(QLabel("Current buyers:"))
+        self.buyers_list = self.make_buyer_list(auction_data)
+        buyers_view.addWidget(self.buyers_list)
+        self.mainlayout.addLayout(buyers_view)
+
+        # If the buyer has withdawn, do not show a withdraw button
+        if auction_data.is_active(self.root_widget.username) == False:
+            withdrawn_info = QLabel("\nYou have withdrawn from the auction.")
+            self.mainlayout.addWidget(withdrawn_info)
+            return
+        
+        # Otherwise, show a withdraw button 
+        self.mainlayout.addWidget(QLabel("\nDo you want to withdraw from the auction?\n(Once withdrawn, you cannot re-join the auction.)"))
+        self.withdraw_button = QPushButton("Withdraw")
+        self.withdraw_button.clicked.connect(self.withdraw_button_clicked)
+        self.mainlayout.addWidget(self.withdraw_button)
+    
+    
+    def make_buyer_list(self, auction_data):
+        """ Make a list of buyers, including their active/withdraw status, from auciont_data """
+        buyer_list = QListWidget()
+        for b in auction_data.buyers:
+            item = QListWidgetItem(b)
+            if auction_data.is_active(b):
+                item = QListWidgetItem(b + " : " + "active")
+                item.setForeground(Qt.GlobalColor.red)
+            else:
+                item = QListWidgetItem(b + " : " + "withdrawn")
+            buyer_list.addItem(item)
+        return buyer_list
+
     def withdraw_button_clicked(self):
+        """ UI: handle the case that the user clickes the withdraw button """
         auction_id = self.auction_id
         success, message = self.root_widget.model.withdraw(auction_id)
         if not success:
             self.root_widget.display_message(message)
-        # self.root_widget.update()
-        
-
-    """ This function is called when we need to update the UI
-        with new auction_data
-    """
-    def update(self, auction_data):
-        self.auction_id = auction_data.id
-        self.seller_label.setText(auction_data.seller.username)
-        self.item_label.setText(auction_data.item.name)
-        self.current_price_label.setText(price_to_string(auction_data.current_price))
-        
-        self.buyers_list.clear()
-        for b in auction_data.buyers:
-            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrew"
-            self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
-
-        current_buyer = self.root_widget.data.username
-        if current_buyer in auction_data.buyers:
-            if auction_data.is_active(current_buyer) == True:
-                self.active_withdrew_layout.setCurrentWidget(self.active_widget)
-            else:
-                self.active_withdrew_layout.setCurrentWidget(self.withdrew_info)

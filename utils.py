@@ -91,6 +91,13 @@ class AuctionData():
         for x in buyer_status:
             self.buyers[x.username] = x.active
     
+    
+    def get_buyer_status_list(self):
+        res = []
+        for b in self.buyers:
+            res.append(pb2.BuyerStatus(username=b, active=self.is_active(b)))
+        return res
+    
 
     def get_winner(self):
         """ Return the username of the winner of the auction,
