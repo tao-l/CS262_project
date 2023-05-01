@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QStackedLayout, QFormLayout, QGroupBox
-from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QLabel, QPushButton, QMessageBox, QTableWidget
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedLayout, QFormLayout, QGroupBox
+from PyQt6.QtWidgets import QListWidget, QLabel, QPushButton, QMessageBox, QTableWidget
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, QObject, Qt
 
@@ -10,28 +10,22 @@ import auction_pb2 as pb2
 
 import time
 import threading
+import copy
 
 import utils
 from utils import UserData, AuctionData, ItemData, price_to_string, RPC_Address
 
 import test_toolkit
 import logging
-logging.basicConfig(level=logging.DEBUG)
 
 
 """ Define the data a buyer has """
 class Data():
     def __init__(self):
-        self.username = None
-        # A mapping from aution's id to AuctionData
-        self.auctions = {} 
-        # Record the RPC service address of each seller: 
-        # A dictionary that maps each seller's username to RPC_Address
-        self.addresses = {}
-        # A dictionary that maps each seller's username to their RPC service stub
-        self.rpc_stubs = {}
-        # A lock used to prevent these data from being modified simultaneously by multiple threads. 
-        self.lock = threading.Lock()
+        self.username = None   # Buyer's username
+        self.auctions = {}     # A mapping from aution's id to AuctionData
+        self.rpc_stubs = {}    # A dictionary that maps each seller's username to their RPC service stub
+        self.lock = threading.Lock()  # A lock to prevent data from being modified by multiple threads simultaneously. 
 
 
 class Buyer(QObject):
@@ -43,11 +37,10 @@ class Buyer(QObject):
 
         self.data = Data()
         self.data.username = username
-        self.data.auctions = self.get_all_auctions_from_server()
 
         self.ui = BuyerUI(self)
-        self.ui_update_all_signal.connect(lambda : self.ui.update_all(self.data))
-        self.ui_update_auctions_signal.connect(lambda : self.ui.update_all(self.data))
+        self.ui_update_all_signal.connect(lambda : self.ui_update(mode="all"))
+        self.ui_update_auctions_signal.connect(lambda : self.ui_update(mode="auctions"))
 
         # Start buyer's RPC service 
         self.rpc = Buyer_RPC_Servicer(self)
@@ -59,7 +52,27 @@ class Buyer(QObject):
         print(f"Buyer {self.data.username} RPC server started.")
 
         # Finally, update UI (by emitting signal to notify the UI component)
-        self.ui_update_signal.emit()
+        # self.ui_update_all_signal.emit()
+        # Finally, start a loop to periodically fetch data from platform and update UI.
+        threading.Thread(target = self.data_update_loop, daemon=True).start()
+    
+
+    def ui_update(self, mode):
+        data_copy = Data()
+        with self.data.lock:
+            data_copy.username = copy.deepcopy(self.data.username)
+            data_copy.auctions = copy.deepcopy(self.data.auctions)
+        
+        if mode == "all":
+            self.ui.update_all(data_copy)
+        elif mode == "auctions":
+            self.ui.update_auctions(data_copy)
+    
+
+    def data_update_loop(self):
+        while True:
+            self.fetch_auctions_from_server()
+            time.sleep(1)
     
 
     def fetch_auctions_from_server(self):
@@ -74,12 +87,12 @@ class Buyer(QObject):
                     #  - If the auction is finished: replace the buyer's data with the platform's:
                     if pa.finished:
                         logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: finished")
-                        self.data.my_auctions[id] = pa
+                        self.data.auctions[id] = pa
                         continue
                     #  - If the auction is not started and not finished: replace the buyer's data with the platform's:  
                     elif not pa.started:
                         logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: not started")
-                        self.data.my_auctions[id] = pa
+                        self.data.auctions[id] = pa
                         continue 
                     #  - Otherwise, the auction is started and not finished:
                     #    Do not change the buyer's data because the auction is taken cared of by the seller now
@@ -89,7 +102,7 @@ class Buyer(QObject):
                     # For an auction that is in the platform's data but in the buyer's, 
                     # add this auction to the buyer's auction list
                     logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: new auction")
-                    self.data.my_auctions[id] = pa
+                    self.data.auctions[id] = pa
                     auction_list_needs_update = True
         
         # If the auction lists needs to update, update the entire UI, 
@@ -135,7 +148,7 @@ class Buyer(QObject):
         # After the operation, the UI needs to be updated. 
         # So, we emit a signal to notify the UI to update.
         # We must use a signal because the UI update is done in another thread. 
-        self.ui_update_signal.emit()
+        self.ui_update_auctions_signal.emit()
     
 
     def handle_finish_auction(self, request):
@@ -160,14 +173,14 @@ class Buyer(QObject):
         # After the data is updated, the UI needs to be updated. 
         # We emit a signal to notify the UI to update.
         # We use a signal because the UI update is done in another thread. 
-        self.ui_update_signal.emit()
+        self.ui_update_auctions_signal.emit()
     
 
     def get_all_auctions_from_server(self):
         return test_toolkit.test_1.get_all_auctions()
     
     def join_auction(self, auction_id):
-        logging.info(f"Buyer {self.data.username} tries to join auction {auction_id}")
+        logging.info(f"Buyer [{self.data.username}] tries to join auction [{auction_id}]")
         request = {}
         request["op"] = "BUYER_JOIN_AUCTION"
         request["username"] = self.data.username
@@ -175,13 +188,14 @@ class Buyer(QObject):
         success, result = self.rpc_to_server(request)
         if not success:
             return success, "Cannot join this auction"
-        self.ui_update_signal.emit()
-        logging.info(f" Buyer {self.data.username} tries to join from auction {auction_id}: success")
+        logging.info(f" Buyer [{self.data.username}] tries to join auction [{auction_id}]: success")
+        # At this point, the operation is successful. Fetch auction data from server to update the UI.
+        self.fetch_auctions_from_server()
         return success, "success"
     
 
     def quit_auction(self, auction_id):
-        logging.info(f" Buyer {self.data.username} tries to quit from auction {auction_id}")
+        logging.info(f" Buyer [{self.data.username}] tries to quit from auction [{auction_id}]")
         request = {}
         request["op"] = "BUYER_QUIT_AUCTION"
         request["username"] = self.data.username
@@ -189,7 +203,9 @@ class Buyer(QObject):
         success, result = self.rpc_to_server(request)
         if not success:
             return success, "Cannot quit from this auction"
-        self.ui_update_signal.emit()
+        logging.info(f"  Buyer [{self.data.username}] tries to quit from auction [{auction_id}]: success")
+        # At this point, the operation is successful. Fetch auction data from server to update the UI.
+        self.fetch_auctions_from_server()
         return success, "success"
     
 
@@ -633,8 +649,7 @@ class BuyerUI(QWidget):
             a = self.data.auctions[self.selected_auction]
             # create a new page based on auction status
             if a.finished == True:
-                # w = Auction_finished_Page(self, a)
-                pass 
+                w = Auction_Finished_Page(self, a) 
             elif a.started == False:
                 w = Auction_Prestarted_Page(self, a)
             else:
@@ -645,28 +660,26 @@ class BuyerUI(QWidget):
         self.stacked_layout.setCurrentWidget(w)
     
     
-    def update_all(self, data=None):
+    def update_all(self, data):
         """ Updates the entire UI, using the given new data """
-        if data == None:
-            data = self.model.data
-        
         self.data = data
         self.username_label.setText(data.username)
-        self.update_auction_list()
-        self.update_auctions()
+        self.update_auction_list(data.auctions)
+        self.update_auctions(data)
     
 
-    def update_auction_list(self):
-        """ This function only updates the auction list, given new auctions data """
+    def update_auction_list(self, auctions):
+        """ This function only updates the auction list, given new auction data """
         self.auction_list_widget.clear()
         self.auction_id_list = []
-        for (auction_id, a) in self.data.auctions.items():
+        for (auction_id, a) in auctions.items():
             self.auction_list_widget.addItem(a.name)
             self.auction_id_list.append(auction_id)
     
 
-    def update_auctions(self):
-        """ This function only updates the auction page UI, given new auctions data """
+    def update_auctions(self, data):
+        """ This function only updates the auction page UI, given new data """
+        self.data = data
         self.update_displayed_auction()
     
 
@@ -703,18 +716,7 @@ class Auction_Page_Base(QWidget):
         seller_item_form.addRow(QLabel("Description:"), item_description_label)
         self.mainlayout.addLayout(seller_item_form)
 
-    def make_buyer_list(self, auction_data):
-        """ Make a list of buyers, including their active/withdraw status, from auciont_data """
-        buyer_list = QListWidget()
-        for b in auction_data.buyers:
-            item = QListWidgetItem(b)
-            if auction_data.is_active(b):
-                item = QListWidgetItem(b + " : " + "active")
-                item.setForeground(Qt.GlobalColor.red)
-            else:
-                item = QListWidgetItem(b + " : " + "withdrawn")
-            buyer_list.addItem(item)
-        return buyer_list
+
 
 # class Price_Increment_Label(QLabel):
 #         def __init__(self): 
@@ -732,7 +734,7 @@ class Auction_Prestarted_Page(Auction_Page_Base):
 
         buyers_view = QVBoxLayout()
         buyers_view.addWidget(QLabel("Current buyers in the auction:"))
-        self.buyers_list = self.make_buyer_list(auction_data)
+        self.buyers_list = utils.UI_tools.make_buyer_list(auction_data, need_status=False)
         buyers_view.addWidget(self.buyers_list)
         self.mainlayout.addLayout(buyers_view)
 
@@ -767,7 +769,7 @@ class Auction_Started_Page(Auction_Page_Base):
         self.mainlayout.addWidget(QLabel("Auction has started."))
 
         # If this buyer does not join this auction. Do not show any information.
-        if self.root_widget.username not in auction_data.buyers:
+        if self.root_widget.data.username not in auction_data.buyers:
             self.mainlayout.addWidget(QLabel("You did not join this auction, so cannot see other information of this auction."))
             return
         
@@ -785,12 +787,12 @@ class Auction_Started_Page(Auction_Page_Base):
 
         buyers_view = QVBoxLayout()
         buyers_view.addWidget(QLabel("Current buyers:"))
-        self.buyers_list = self.make_buyer_list(auction_data)
+        self.buyers_list = utils.UI_tools.make_buyer_list(auction_data, need_status=True)
         buyers_view.addWidget(self.buyers_list)
         self.mainlayout.addLayout(buyers_view)
 
         # If the buyer has withdawn, do not show a withdraw button
-        if auction_data.is_active(self.root_widget.username) == False:
+        if auction_data.is_active(self.root_widget.data.username) == False:
             withdrawn_info = QLabel("\nYou have withdrawn from the auction.")
             self.mainlayout.addWidget(withdrawn_info)
             return
@@ -807,3 +809,38 @@ class Auction_Started_Page(Auction_Page_Base):
         success, message = self.root_widget.model.withdraw(auction_id)
         if not success:
             self.root_widget.display_message(message)
+
+
+class Auction_Finished_Page(Auction_Page_Base):
+    def __init__(self, root_widget, auction_data):
+        super().__init__(root_widget, auction_data)
+        self.mainlayout.addWidget(QLabel("Auction has finished."))
+
+
+        winner_info = QVBoxLayout()
+        if auction_data.winner_username in {"", None}:
+            winner_info.addWidget(QLabel("This auction does not have a winner"))
+        else:
+            winner_row = QHBoxLayout()
+            winner_row.addWidget(QLabel("Winner:"))
+            self.winner_label = QLabel(auction_data.winner_username)
+            BOLD = QFont();  BOLD.setBold(True)
+            self.winner_label.setFont(BOLD)
+            winner_row.addWidget(self.winner_label)
+            price_row = QHBoxLayout()
+            price_row.addWidget(QLabel("Transaction price: "))
+            self.price_label = QLabel(price_to_string(auction_data.transaction_price))
+            self.price_label.setFont(BOLD)
+            price_row.addWidget(self.price_label)
+            winner_info.addLayout(winner_row)
+            winner_info.addLayout(price_row)
+        self.mainlayout.addLayout(winner_info)
+
+        # Depending on whether the buyer were in the auction, display the information of buyers in the auction or not 
+        if self.root_widget.data.username in auction_data.buyers:
+            self.mainlayout.addWidget(QLabel("Participated buyers:"))
+            self.mainlayout.addWidget(utils.UI_tools.make_buyer_list(auction_data, need_status=False, gray_background=True))
+        else:
+            self.mainlayout.addWidget(QLabel("You cannot see the list of buyers in the auction because you didn't join it."))
+
+        

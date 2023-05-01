@@ -6,6 +6,7 @@ from seller import Seller
 
 import auction_pb2 as pb2
 
+import logging
 import time
 import threading
 
@@ -44,6 +45,8 @@ def test_handle_announce_price(buyer):
     
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
     app = QApplication([])
     window = QMainWindow()
 

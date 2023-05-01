@@ -17,7 +17,6 @@ from utils import UserData, AuctionData, ItemData, price_to_string
 
 import test_toolkit
 import logging
-logging.basicConfig(level=logging.DEBUG)
 
 
 DEBUG = False
@@ -364,13 +363,13 @@ class Seller(QObject):
     
 
     def create_auction(self, auction_name, item, base_price, period, increment):
-        print("Trying to create auction:", auction_name, item.name, base_price, period, increment)
+        logging.info("Seller {self.data.username} trying to create auction: {auction_name}, {item.name}, {base_price}, {period}, {increment}")
         request = {}
         request["op"] = "SELLER_CREATE_AUCTION"
         request["seller_username"] = self.data.username
         request["auction_name"] = auction_name
         request["item_name"] = item.name
-        request["item_descrption"] = item.description
+        request["item_description"] = item.description
         request["base_price"] = base_price
         request["price_increment_period"] = period
         request["increment"] = increment
@@ -579,23 +578,25 @@ class SellerUI(QWidget):
                 QMessageBox.critical(self, "", "Item description is too long!")
                 return 
             
-            (valid, base_price, error_message) = utils.string_to_number_and_check_range(self.base_price_LE.text(), lb=0, ub=1000000)
+            (valid, base_price_raw, error_message) = utils.string_to_number_and_check_range(self.base_price_LE.text(), lb=0, ub=1000000)
             if not valid:
                 QMessageBox.critical(self, "", error_message)
                 return 
             
-            (valid, period, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0.001, ub=100000)
+            (valid, period_in_seconds, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0.01, ub=100000)
             if not valid:
                 QMessageBox.critical(self, "", error_message)
                 return 
             
-            (valid, increment, error_message) = utils.string_to_number_and_check_range(self.increment_LE.text(), lb=0.01, ub=100000)
+            (valid, increment_raw, error_message) = utils.string_to_number_and_check_range(self.increment_LE.text(), lb=0.01, ub=100000)
             if not valid:
                 QMessageBox.critical(self, "", error_message)
                 return
             
             # check is done. Call the model's create_auction() function 
-            period_in_ms = int( period * 1000 )
+            period_in_ms = int( period_in_seconds * 1000 )
+            base_price = int( base_price_raw * 100 )
+            increment = int( increment_raw * 100 )
             (success, message) = self.model.create_auction(auction_name,
                                                            ItemData(name=item_name, description=item_description),
                                                            base_price, period_in_ms, increment)
@@ -713,6 +714,7 @@ class Auction_Starting_Page(QWidget):
 
         self.setLayout(layout)
 
+
     def start_button_clicked(self):
         auction_id = self.auction_id
         # call the model's start_auction() function to start the auction
@@ -721,6 +723,7 @@ class Auction_Starting_Page(QWidget):
             # if not successful, display error message
             QMessageBox.critical(self, "", message)
     
+
     """ This function is called when we need to update the UI
         with new auction_data
     """
@@ -791,7 +794,7 @@ class Auction_Started_Page(QWidget):
 
         self.buyers_list.clear()
         for b in auction_data.buyers:
-            active_or_withdrew = "active" if auction_data.is_active(b) else "withdraw"
+            active_or_withdrew = "active" if auction_data.is_active(b) else "withdrawn"
             self.buyers_list.addItem(b + "  :  " + active_or_withdrew)
 
 
@@ -892,6 +895,10 @@ class Auction_Finished_Page(QWidget):
         price_row.addWidget(self.price_label)
         layout.addLayout(price_row)
 
+        layout.addWidget(QLabel("Participated buyers:"))
+        self.buyer_list = QListWidget()
+        layout.addWidget(self.buyer_list)
+
         self.setLayout(layout)
 
     """ This function is called when we need to update the UI
@@ -902,4 +909,9 @@ class Auction_Finished_Page(QWidget):
         self.item_label.setText(auction_data.item.name)
         self.winner_label.setText(auction_data.winner_username)
         self.price_label.setText(price_to_string(auction_data.transaction_price))
+
+        self.buyer_list.clear()
+        for b in auction_data.buyers:
+            self.buyer_list.addItem(b)
+        self.buyer_list.setStyleSheet("""QListWidget{background: lightgray;}""")
 

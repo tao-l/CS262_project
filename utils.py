@@ -139,4 +139,30 @@ class RPC_Address:
 def find_address_from_server(username):
     # return test_toolkit.Example_1.find_address_from_server(username)
     pass
-    
+
+
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem
+from PyQt6.QtCore import Qt
+
+class UI_tools:
+    def make_buyer_list(auction_data, need_status=True, gray_background=False):
+        """ Make a list of buyers, including their active/withdraw status, from auciont_data """
+        buyer_list = QListWidget()
+        for b in auction_data.buyers:
+            item = QListWidgetItem(b)
+            if need_status: 
+                if auction_data.is_active(b):
+                    item = QListWidgetItem(b + " : " + "active")
+                    item.setForeground(Qt.GlobalColor.red)
+                else:
+                    item = QListWidgetItem(b + " : " + "withdrawn")
+            else:
+                item = QListWidgetItem(b)
+            buyer_list.addItem(item)
+        # buyer_list.setAutoFillBackground(True)
+        # p = buyer_list.palette()
+        # p.setColor(buyer_list.foregroundRole(), Qt.GlobalColor.red)
+        # buyer_list.setPalette(p)
+        if gray_background:
+            buyer_list.setStyleSheet("""QListWidget{background: lightgray;}""")
+        return buyer_list
