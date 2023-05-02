@@ -196,26 +196,6 @@ class Seller(QObject):
                 self.withdraw(auction_id, buyer)
     
 
-    def RPC_to_buyer(self, rpc_name, request, buyer):
-        # First, get the buyer's RPC stub
-        with self.data.lock:
-            if buyer not in self.data.rpc_stubs:
-                return False, f"Does not have buyer's RPC stub."
-            stub = self.data.rpc_stubs[buyer]
-        # Then, try to make the RPC call
-        try:
-            if rpc_name == "announce_price":
-                response = stub.announce_price(request)
-            elif rpc_name == "finish_auction":
-                response = stub.finish_auction(request)
-            else:
-                raise Exception(f"RPC {rpc_name} not supported")
-        except grpc.RpcError as e:
-            # logging.debug(e)
-            return False, "RPC error"
-        return True, response
-    
-
     def finish_auction(self, auction_id, has_winner=True):
         """ Finish an auction and notify buyers. 
             
@@ -255,8 +235,8 @@ class Seller(QObject):
         # Notify all buyers that this auction is finished
         logging.info(f"Seller: auction [{auction_id}] is finished. Starts to notify buyers.")
         for b in auction.buyers:
-            threading.Thread(target = self.send_rpc_request_to_buyer,
-                             args = ("finish_auction", b, rpc_request), 
+            threading.Thread(target = self.RPC_to_buyer,
+                             args = ("finish_auction", rpc_request, b), 
                              daemon = True).start()
         
         # At this point, the finish auction operation is completed.
@@ -267,12 +247,12 @@ class Seller(QObject):
         self.ui_update_auctions_signal.emit()
     
 
-    def send_rpc_request_to_buyer(self, rpc_name, buyer, request):
+    def RPC_to_buyer(self, rpc_name, request, buyer):
         """ Seller sends a RPC request to buyer 
             - Input:
                 - rpc_name : "announce_price" or "finish_auction"
+                - request  : RPC request object (pb2.AnnouncePriceRequest or pb2.FinishAuctionRequest) 
                 - buyer    : the username of the buyer receiving this RPC request
-                - request  : a pb2 RPC request object
             - Return: 
                 - a bool   : successful or not
                 - a response or error message : buyer's response or error message
@@ -295,8 +275,28 @@ class Seller(QObject):
                 raise Exception(f"Buyer RPC service [{rpc_name}] not supported!")
         except grpc.RpcError as e:
             logging.debug(e)
-            return False, f"Cannot contact with buyer!"
+            return False, f"Buyer {buyer} RPC error."
         return True, response
+    
+
+    # def RPC_to_buyer(self, rpc_name, request, buyer):
+    #     # First, get the buyer's RPC stub
+    #     with self.data.lock:
+    #         if buyer not in self.data.rpc_stubs:
+    #             return False, f"Does not have buyer's RPC stub."
+    #         stub = self.data.rpc_stubs[buyer]
+    #     # Then, try to make the RPC call
+    #     try:
+    #         if rpc_name == "announce_price":
+    #             response = stub.announce_price(request)
+    #         elif rpc_name == "finish_auction":
+    #             response = stub.finish_auction(request)
+    #         else:
+    #             raise Exception(f"RPC {rpc_name} not supported")
+    #     except grpc.RpcError as e:
+    #         # logging.debug(e)
+    #         return False, "RPC error"
+    #     return True, response
     
     
     def price_increment_loop(self, auction_id):
@@ -394,7 +394,7 @@ class Seller(QObject):
         # If create_auction does not succeed, return error message
         if not server_ok:
             return False, "Cannot create auction: Server Error."
-        if response['success']:
+        if response['success'] == False:
             return False, "Cannot create auction: " + response["message"]
         # Otherwise (succeeded), fetch auction data (including the newly created auction) from server
         self.fetch_auctions_from_server_and_update()

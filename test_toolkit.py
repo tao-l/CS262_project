@@ -109,6 +109,7 @@ class Test_1:
         if auction.started == True:
             return {"success": True, "message": "success"}
         else:
+            auction.started = True
             return {"success": True, "message": auction.to_dict()}
     
 
