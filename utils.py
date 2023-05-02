@@ -1,4 +1,5 @@
 import auction_pb2 as pb2
+import json
 
 class UserData():
     def __init__(self, username=""):
@@ -102,4 +103,5 @@ class RPC_Address:
 def find_address_from_server(username):
     # return test_toolkit.Example_1.find_address_from_server(username)
     pass
-    
+
+

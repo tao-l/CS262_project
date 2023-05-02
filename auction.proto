@@ -13,45 +13,30 @@ service SellerService {
 }
 
 service PlatformService {
+    rpc rpc_platform_serve(PlatformServiceRequest) returns (PlatformServiceResponse); 
+   
+    /*
+    The below nine rpc services are combined into the one above. This is done to
+    provide uniform structure for raft services
+    
     rpc login(User_Address) returns (SuccessMessage); 
     rpc get_user_address(User) returns (User_Address);      // Fetch the ip address and port of a user
     
     rpc buyer_fetch_auctions(User) returns (stream AuctionInfo); 
     rpc buyer_join_auction(UserAuctionPair) returns (SuccessMessage);
+    rpc buyer_quite_auction(UserAuctionPair) returns (SuccessMessage);
 
     rpc seller_create_auction(CreateRequest) returns (CreateReponse);
     rpc seller_start_auction(UserAuctionPair) returns (AuctionInfo); 
-    rpc seller_finish_auction(AuctionInfo) returns (SuccessMessage);
+    rpc seller_finish_auction(UserAuctionPair) returns (SuccessMessage);
     rpc seller_update_auction(AuctionInfo) returns (SuccessMessage);
     rpc seller_fetch_auctions(User) returns (stream AuctionInfo);
-}
-
-
-message SuccessMessage {
-    bool   success = 1;    // whether the operation is successful or not
-    string message = 2;    // error message if not successful
-}
-
-message User {
-    string username = 1;     // username serves as the unique id of a buyer
-    //string name = 2;         // name of buyer. Needs not be unique
-}
-
-message User_Address {
-    string username = 1;
-    string ip_address = 2;
-    string port = 3;
+    */
 }
 
 message UserAuctionPair {
     string username = 1;
     string auction_id = 2;
-}
-
-// An object that records the status of a buyer in an auction
-message BuyerStatus {
-    string username = 1;     // the username of the buyer 
-    bool   active = 2;       // whether this buyer is still active in the auction
 }
 
 message AnnouncePriceRequest {
@@ -71,6 +56,43 @@ message FinishAuctionRequest {
     // The status of all buyers in the auction
     repeated BuyerStatus buyer_status = 4; 
 }
+
+
+message PlatformServiceRequest{
+    string json = 1; // op: ...,
+}
+
+message PlatformServiceResponse{
+    bool is_leader = 1;
+    string json = 2; // status:, message:
+}
+
+message SuccessMessage {
+    bool   success = 1;    // whether the operation is successful or not
+    string message = 2;    // error message if not successful, in json format for platform response
+}
+
+message BuyerStatus {
+    string username = 1;     // the username of the buyer 
+    bool   active = 2;       // whether this buyer is still active in the auction
+}
+
+/*
+This block of message class is commented out because summarized into a json string for command
+
+message User {
+    string username = 1;     // username serves as the unique id of a buyer
+    //string name = 2;         // name of buyer. Needs not be unique
+}
+
+message User_Address {
+    string username = 1;
+    string ip_address = 2;
+    string port = 3;
+}
+
+// An object that records the status of a buyer in an auction
+
 
 message CreateRequest {
     string username = 1;        // the username of the seller who creates this auction
@@ -104,6 +126,12 @@ message AuctionInfo {
     repeated BuyerStatus buyer_status = 12; 
 }
 
+*/
+
+
+
+// The below message class are commented out because they can be replaced
+// by more efficient message class objects in the above commented out block
 // message WithdrawRequest {
 //     // A withdraw request includes the id of the auction
 //     // and the username of the buyer withdrawing from that auction. 

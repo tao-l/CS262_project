@@ -152,7 +152,7 @@ class RaftServiceServicer(raft_pb2_grpc.RaftServiceServicer):
           - if yes, adds the request and replicates it to other RAFT servers. 
           - otherwise, does not add the request
         - Input: 
-            command   :  raft_pb2.ChatRequest object
+            command   :  raft_pb2.Command object
         - Return: (index, term, is_leader):
             index     :  index of the command in the log if the command is committed
             term      :  current term
@@ -160,7 +160,7 @@ class RaftServiceServicer(raft_pb2_grpc.RaftServiceServicer):
                          If no, the command is not added to the log. 
     """
     def new_entry(self, command):
-        logging.info(f"  RAFT [{self.my_id}] - new entry: " + command.message)   
+        logging.info(f"  RAFT [{self.my_id}] - new entry: " + command.json)   
         with self.lock: 
             if self.state != Leader:
                 logging.info(f"      RAFT [{self.my_id}]: not leader, cannot add entry")

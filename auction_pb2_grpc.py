@@ -169,106 +169,17 @@ class PlatformServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.login = channel.unary_unary(
-                '/auction.PlatformService/login',
-                request_serializer=auction__pb2.User_Address.SerializeToString,
-                response_deserializer=auction__pb2.SuccessMessage.FromString,
-                )
-        self.get_user_address = channel.unary_unary(
-                '/auction.PlatformService/get_user_address',
-                request_serializer=auction__pb2.User.SerializeToString,
-                response_deserializer=auction__pb2.User_Address.FromString,
-                )
-        self.buyer_fetch_auctions = channel.unary_stream(
-                '/auction.PlatformService/buyer_fetch_auctions',
-                request_serializer=auction__pb2.User.SerializeToString,
-                response_deserializer=auction__pb2.AuctionInfo.FromString,
-                )
-        self.buyer_join_auction = channel.unary_unary(
-                '/auction.PlatformService/buyer_join_auction',
-                request_serializer=auction__pb2.UserAuctionPair.SerializeToString,
-                response_deserializer=auction__pb2.SuccessMessage.FromString,
-                )
-        self.seller_create_auction = channel.unary_unary(
-                '/auction.PlatformService/seller_create_auction',
-                request_serializer=auction__pb2.CreateRequest.SerializeToString,
-                response_deserializer=auction__pb2.CreateReponse.FromString,
-                )
-        self.seller_start_auction = channel.unary_unary(
-                '/auction.PlatformService/seller_start_auction',
-                request_serializer=auction__pb2.UserAuctionPair.SerializeToString,
-                response_deserializer=auction__pb2.AuctionInfo.FromString,
-                )
-        self.seller_finish_auction = channel.unary_unary(
-                '/auction.PlatformService/seller_finish_auction',
-                request_serializer=auction__pb2.AuctionInfo.SerializeToString,
-                response_deserializer=auction__pb2.SuccessMessage.FromString,
-                )
-        self.seller_update_auction = channel.unary_unary(
-                '/auction.PlatformService/seller_update_auction',
-                request_serializer=auction__pb2.AuctionInfo.SerializeToString,
-                response_deserializer=auction__pb2.SuccessMessage.FromString,
-                )
-        self.seller_fetch_auctions = channel.unary_stream(
-                '/auction.PlatformService/seller_fetch_auctions',
-                request_serializer=auction__pb2.User.SerializeToString,
-                response_deserializer=auction__pb2.AuctionInfo.FromString,
+        self.rpc_platform_serve = channel.unary_unary(
+                '/auction.PlatformService/rpc_platform_serve',
+                request_serializer=auction__pb2.PlatformServiceRequest.SerializeToString,
+                response_deserializer=auction__pb2.PlatformServiceResponse.FromString,
                 )
 
 
 class PlatformServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def login(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def get_user_address(self, request, context):
-        """Fetch the ip address and port of a user
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def buyer_fetch_auctions(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def buyer_join_auction(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def seller_create_auction(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def seller_start_auction(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def seller_finish_auction(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def seller_update_auction(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def seller_fetch_auctions(self, request, context):
+    def rpc_platform_serve(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -277,50 +188,10 @@ class PlatformServiceServicer(object):
 
 def add_PlatformServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'login': grpc.unary_unary_rpc_method_handler(
-                    servicer.login,
-                    request_deserializer=auction__pb2.User_Address.FromString,
-                    response_serializer=auction__pb2.SuccessMessage.SerializeToString,
-            ),
-            'get_user_address': grpc.unary_unary_rpc_method_handler(
-                    servicer.get_user_address,
-                    request_deserializer=auction__pb2.User.FromString,
-                    response_serializer=auction__pb2.User_Address.SerializeToString,
-            ),
-            'buyer_fetch_auctions': grpc.unary_stream_rpc_method_handler(
-                    servicer.buyer_fetch_auctions,
-                    request_deserializer=auction__pb2.User.FromString,
-                    response_serializer=auction__pb2.AuctionInfo.SerializeToString,
-            ),
-            'buyer_join_auction': grpc.unary_unary_rpc_method_handler(
-                    servicer.buyer_join_auction,
-                    request_deserializer=auction__pb2.UserAuctionPair.FromString,
-                    response_serializer=auction__pb2.SuccessMessage.SerializeToString,
-            ),
-            'seller_create_auction': grpc.unary_unary_rpc_method_handler(
-                    servicer.seller_create_auction,
-                    request_deserializer=auction__pb2.CreateRequest.FromString,
-                    response_serializer=auction__pb2.CreateReponse.SerializeToString,
-            ),
-            'seller_start_auction': grpc.unary_unary_rpc_method_handler(
-                    servicer.seller_start_auction,
-                    request_deserializer=auction__pb2.UserAuctionPair.FromString,
-                    response_serializer=auction__pb2.AuctionInfo.SerializeToString,
-            ),
-            'seller_finish_auction': grpc.unary_unary_rpc_method_handler(
-                    servicer.seller_finish_auction,
-                    request_deserializer=auction__pb2.AuctionInfo.FromString,
-                    response_serializer=auction__pb2.SuccessMessage.SerializeToString,
-            ),
-            'seller_update_auction': grpc.unary_unary_rpc_method_handler(
-                    servicer.seller_update_auction,
-                    request_deserializer=auction__pb2.AuctionInfo.FromString,
-                    response_serializer=auction__pb2.SuccessMessage.SerializeToString,
-            ),
-            'seller_fetch_auctions': grpc.unary_stream_rpc_method_handler(
-                    servicer.seller_fetch_auctions,
-                    request_deserializer=auction__pb2.User.FromString,
-                    response_serializer=auction__pb2.AuctionInfo.SerializeToString,
+            'rpc_platform_serve': grpc.unary_unary_rpc_method_handler(
+                    servicer.rpc_platform_serve,
+                    request_deserializer=auction__pb2.PlatformServiceRequest.FromString,
+                    response_serializer=auction__pb2.PlatformServiceResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -333,7 +204,7 @@ class PlatformService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def login(request,
+    def rpc_platform_serve(request,
             target,
             options=(),
             channel_credentials=None,
@@ -343,144 +214,8 @@ class PlatformService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/login',
-            auction__pb2.User_Address.SerializeToString,
-            auction__pb2.SuccessMessage.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def get_user_address(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/get_user_address',
-            auction__pb2.User.SerializeToString,
-            auction__pb2.User_Address.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def buyer_fetch_auctions(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/auction.PlatformService/buyer_fetch_auctions',
-            auction__pb2.User.SerializeToString,
-            auction__pb2.AuctionInfo.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def buyer_join_auction(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/buyer_join_auction',
-            auction__pb2.UserAuctionPair.SerializeToString,
-            auction__pb2.SuccessMessage.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def seller_create_auction(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/seller_create_auction',
-            auction__pb2.CreateRequest.SerializeToString,
-            auction__pb2.CreateReponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def seller_start_auction(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/seller_start_auction',
-            auction__pb2.UserAuctionPair.SerializeToString,
-            auction__pb2.AuctionInfo.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def seller_finish_auction(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/seller_finish_auction',
-            auction__pb2.AuctionInfo.SerializeToString,
-            auction__pb2.SuccessMessage.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def seller_update_auction(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/seller_update_auction',
-            auction__pb2.AuctionInfo.SerializeToString,
-            auction__pb2.SuccessMessage.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def seller_fetch_auctions(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/auction.PlatformService/seller_fetch_auctions',
-            auction__pb2.User.SerializeToString,
-            auction__pb2.AuctionInfo.FromString,
+        return grpc.experimental.unary_unary(request, target, '/auction.PlatformService/rpc_platform_serve',
+            auction__pb2.PlatformServiceRequest.SerializeToString,
+            auction__pb2.PlatformServiceResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

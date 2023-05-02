@@ -13,37 +13,31 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rauction.proto\x12\x07\x61uction\"2\n\x0eSuccessMessage\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x18\n\x04User\x12\x10\n\x08username\x18\x01 \x01(\t\"B\n\x0cUser_Address\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x12\n\nip_address\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\t\"7\n\x0fUserAuctionPair\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x12\n\nauction_id\x18\x02 \x01(\t\"/\n\x0b\x42uyerStatus\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x0e\n\x06\x61\x63tive\x18\x02 \x01(\x08\"w\n\x14\x41nnouncePriceRequest\x12\x12\n\nauction_id\x18\x01 \x01(\t\x12\x10\n\x08round_id\x18\x02 \x01(\x03\x12\r\n\x05price\x18\x03 \x01(\x03\x12*\n\x0c\x62uyer_status\x18\x04 \x03(\x0b\x32\x14.auction.BuyerStatus\"~\n\x14\x46inishAuctionRequest\x12\x12\n\nauction_id\x18\x01 \x01(\t\x12\x17\n\x0fwinner_username\x18\x02 \x01(\t\x12\r\n\x05price\x18\x03 \x01(\x03\x12*\n\x0c\x62uyer_status\x18\x04 \x03(\x0b\x32\x14.auction.BuyerStatus\"J\n\rCreateRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x14\n\x0c\x61uction_name\x18\x02 \x01(\t\x12\x11\n\titem_name\x18\x03 \x01(\t\"E\n\rCreateReponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x12\n\nauction_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"\xa3\x02\n\x0b\x41uctionInfo\x12\x12\n\nauction_id\x18\x01 \x01(\t\x12\x14\n\x0c\x61uction_name\x18\x02 \x01(\t\x12\x17\n\x0fseller_username\x18\x03 \x01(\t\x12\x11\n\titem_name\x18\x04 \x01(\t\x12\x12\n\nbase_price\x18\x05 \x01(\x03\x12\x0f\n\x07started\x18\x06 \x01(\x08\x12\x10\n\x08\x66inished\x18\x07 \x01(\x08\x12\x15\n\rcurrent_price\x18\x08 \x01(\x03\x12\x10\n\x08round_id\x18\t \x01(\x03\x12\x17\n\x0fwinner_username\x18\n \x01(\t\x12\x19\n\x11transaction_price\x18\x0b \x01(\x03\x12*\n\x0c\x62uyer_status\x18\x0c \x03(\x0b\x32\x14.auction.BuyerStatus2\xa2\x01\n\x0c\x42uyerService\x12H\n\x0e\x61nnounce_price\x12\x1d.auction.AnnouncePriceRequest\x1a\x17.auction.SuccessMessage\x12H\n\x0e\x66inish_auction\x12\x1d.auction.FinishAuctionRequest\x1a\x17.auction.SuccessMessage2N\n\rSellerService\x12=\n\x08withdraw\x12\x18.auction.UserAuctionPair\x1a\x17.auction.SuccessMessage2\xed\x04\n\x0fPlatformService\x12\x37\n\x05login\x12\x15.auction.User_Address\x1a\x17.auction.SuccessMessage\x12\x38\n\x10get_user_address\x12\r.auction.User\x1a\x15.auction.User_Address\x12=\n\x14\x62uyer_fetch_auctions\x12\r.auction.User\x1a\x14.auction.AuctionInfo0\x01\x12G\n\x12\x62uyer_join_auction\x12\x18.auction.UserAuctionPair\x1a\x17.auction.SuccessMessage\x12G\n\x15seller_create_auction\x12\x16.auction.CreateRequest\x1a\x16.auction.CreateReponse\x12\x46\n\x14seller_start_auction\x12\x18.auction.UserAuctionPair\x1a\x14.auction.AuctionInfo\x12\x46\n\x15seller_finish_auction\x12\x14.auction.AuctionInfo\x1a\x17.auction.SuccessMessage\x12\x46\n\x15seller_update_auction\x12\x14.auction.AuctionInfo\x1a\x17.auction.SuccessMessage\x12>\n\x15seller_fetch_auctions\x12\r.auction.User\x1a\x14.auction.AuctionInfo0\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rauction.proto\x12\x07\x61uction\"7\n\x0fUserAuctionPair\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x12\n\nauction_id\x18\x02 \x01(\t\"w\n\x14\x41nnouncePriceRequest\x12\x12\n\nauction_id\x18\x01 \x01(\t\x12\x10\n\x08round_id\x18\x02 \x01(\x03\x12\r\n\x05price\x18\x03 \x01(\x03\x12*\n\x0c\x62uyer_status\x18\x04 \x03(\x0b\x32\x14.auction.BuyerStatus\"~\n\x14\x46inishAuctionRequest\x12\x12\n\nauction_id\x18\x01 \x01(\t\x12\x17\n\x0fwinner_username\x18\x02 \x01(\t\x12\r\n\x05price\x18\x03 \x01(\x03\x12*\n\x0c\x62uyer_status\x18\x04 \x03(\x0b\x32\x14.auction.BuyerStatus\"&\n\x16PlatformServiceRequest\x12\x0c\n\x04json\x18\x01 \x01(\t\":\n\x17PlatformServiceResponse\x12\x11\n\tis_leader\x18\x01 \x01(\x08\x12\x0c\n\x04json\x18\x02 \x01(\t\"2\n\x0eSuccessMessage\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"/\n\x0b\x42uyerStatus\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x0e\n\x06\x61\x63tive\x18\x02 \x01(\x08\x32\xa2\x01\n\x0c\x42uyerService\x12H\n\x0e\x61nnounce_price\x12\x1d.auction.AnnouncePriceRequest\x1a\x17.auction.SuccessMessage\x12H\n\x0e\x66inish_auction\x12\x1d.auction.FinishAuctionRequest\x1a\x17.auction.SuccessMessage2N\n\rSellerService\x12=\n\x08withdraw\x12\x18.auction.UserAuctionPair\x1a\x17.auction.SuccessMessage2j\n\x0fPlatformService\x12W\n\x12rpc_platform_serve\x12\x1f.auction.PlatformServiceRequest\x1a .auction.PlatformServiceResponseb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'auction_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _SUCCESSMESSAGE._serialized_start=26
-  _SUCCESSMESSAGE._serialized_end=76
-  _USER._serialized_start=78
-  _USER._serialized_end=102
-  _USER_ADDRESS._serialized_start=104
-  _USER_ADDRESS._serialized_end=170
-  _USERAUCTIONPAIR._serialized_start=172
-  _USERAUCTIONPAIR._serialized_end=227
-  _BUYERSTATUS._serialized_start=229
-  _BUYERSTATUS._serialized_end=276
-  _ANNOUNCEPRICEREQUEST._serialized_start=278
-  _ANNOUNCEPRICEREQUEST._serialized_end=397
-  _FINISHAUCTIONREQUEST._serialized_start=399
-  _FINISHAUCTIONREQUEST._serialized_end=525
-  _CREATEREQUEST._serialized_start=527
-  _CREATEREQUEST._serialized_end=601
-  _CREATEREPONSE._serialized_start=603
-  _CREATEREPONSE._serialized_end=672
-  _AUCTIONINFO._serialized_start=675
-  _AUCTIONINFO._serialized_end=966
-  _BUYERSERVICE._serialized_start=969
-  _BUYERSERVICE._serialized_end=1131
-  _SELLERSERVICE._serialized_start=1133
-  _SELLERSERVICE._serialized_end=1211
-  _PLATFORMSERVICE._serialized_start=1214
-  _PLATFORMSERVICE._serialized_end=1835
+  _USERAUCTIONPAIR._serialized_start=26
+  _USERAUCTIONPAIR._serialized_end=81
+  _ANNOUNCEPRICEREQUEST._serialized_start=83
+  _ANNOUNCEPRICEREQUEST._serialized_end=202
+  _FINISHAUCTIONREQUEST._serialized_start=204
+  _FINISHAUCTIONREQUEST._serialized_end=330
+  _PLATFORMSERVICEREQUEST._serialized_start=332
+  _PLATFORMSERVICEREQUEST._serialized_end=370
+  _PLATFORMSERVICERESPONSE._serialized_start=372
+  _PLATFORMSERVICERESPONSE._serialized_end=430
+  _SUCCESSMESSAGE._serialized_start=432
+  _SUCCESSMESSAGE._serialized_end=482
+  _BUYERSTATUS._serialized_start=484
+  _BUYERSTATUS._serialized_end=531
+  _BUYERSERVICE._serialized_start=534
+  _BUYERSERVICE._serialized_end=696
+  _SELLERSERVICE._serialized_start=698
+  _SELLERSERVICE._serialized_end=776
+  _PLATFORMSERVICE._serialized_start=778
+  _PLATFORMSERVICE._serialized_end=884
 # @@protoc_insertion_point(module_scope)

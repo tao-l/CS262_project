@@ -8,6 +8,7 @@ import auction_pb2_grpc
 import sys
 import threading
 import queue
+import json
 
 from server_state_machine import StateMachine
 
@@ -47,34 +48,38 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
         self.rf = raft.RaftServiceServicer(replicas, my_id, self.apply_queue, need_persistent)
     
 
-
-
-    """ This function needs to be  re-written """
-    """ This function needs to be  re-written """
-    """ This function needs to be  re-written """
-    """ This function needs to be  re-written """
-    """ This function needs to be  re-written """
-    """ This function needs to be  re-written """
+    """ This function has been re-written compared with assignment 3"""
     """ The RPC service provided to the client.
         Input:
-            request  : a pb2.ChatRequest object
+            request  : a pb2.PlatformServiceRequest object
         Return:
-            response : a pb2.ChatResponse ojbect
+            response : a pb2.PlatformServiceResponse ojbect
     """
-    def rpc_chat_serve(self, request, context):
-        logging.info(f" Platform: receives: op={request.op}, username = {request.username}, message = " + request.message)
+    def rpc_platform_serve(self, request, context):
+        
+        # convert json to commands
+        re  = json.loads(request.json)
+
+        # if the request is a read only request, directly read and respond
+        if re[op] in config.PLATFORM_READ_ONLY_OP:
+            logging.info(f" Platform: receives read only op={re[op]}, username = {re[username]}.")
+            return self.state_machine.apply(re)
+
+        # if the request is write related request, use raft
+        logging.info(f" Platform: receives write op={re[op]}, username = {re[username]}.")
 
         # Try to add the request to the log, using RAFT:
         #   RAFT returns the index of the request in the log, 
         #   and whether the current server is the leader 
-        (index, _, is_leader) = self.rf.new_entry(request)
+        # auction_pb2.PlatformServiceRequest object is identical to raft.Command oject
+        # converting one to another for type casting 
+        raft_command = raft_pb2.Command(json=request.json)
+        (index, _, is_leader) = self.rf.new_entry(raft_command)
 
         # If this request cannot be added because this server is not the leader, 
         # then return error message to the client
         if not is_leader:
-            response = rpc_service_pb2.ChatResponse(op=request.op)
-            response.status = config.SERVER_ERROR
-            response.messages.append("Server is not leader.")
+            response = auction_pb2.PlatformServiceResponse(is_leader=False)
             return response
         
         # Now, we know that the server was the leader. 
@@ -84,10 +89,11 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
             assert index not in self.results
             self.results[index] = [ threading.Event(), None ]
 
-        logging.info(f" Chat: waiting for event, index = {index}")
+        logging.info(f" Platform Server: waiting for event, index = {index}")
         self.results[index][0].wait()         # wait for the event
-        response = self.results[index][1]     # get the response
-        logging.info(f" Chat: got event, index = {index}")
+        response = self.results[index][1]     # get the response, should be a PlatformServiceResponse object now
+        response.is_leader = True
+        logging.info(f" Platform Server: got event, index = {index}")
         return response
     
 
@@ -98,18 +104,12 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
         while True:
             log_entry = self.apply_queue.get()
             index = log_entry.index
-            comand = log_entry.command      # the Command object in raft.proto
-            
+            command = log_entry.command      # the Command object in auction.proto
+            request  = json.loads(command.json) # convert it back to json
 
-            """ The following needs to be re-written """
-            """ The following needs to be re-written """
-            """ The following needs to be re-written """
-            """ The following needs to be re-written """
-            """ The following needs to be re-written """
-            """ The following needs to be re-written """
-            """ The following needs to be re-written """
+            """ The following has been re-written compared to assignment 3"""
             with self.lock:
-                logging.info(f"     Apply request index = {index},  op = {request.op}, username = {request.username}, message = {request.message}")
+                logging.info(f"     Apply request index = {index},  op = {request[op]}, username = {request.username}")
                 # apply the request, and (if needed) record the result and notify the waiting thread. 
                 if index not in self.results:
                     # This case means that the request is not initiated by the current server; 
@@ -117,7 +117,7 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
                     # So, we don't need to record the result and respond to client. 
                     # We just need to apply the request to the state machine
                     logging.info("       replicated")
-                    self.state_machine.apply(request)
+                    self.state_machine.apply(request) # given a dict
                 else:
                     # Otherwise, we need to record the results and notify the current server
                     logging.info("       need to respond to client")
