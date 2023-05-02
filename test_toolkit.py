@@ -67,21 +67,8 @@ class Test_1:
 
             self.all_auctions[auction_id] = auction
 
-
-    # def get_all_auctions(self):
-    #     # return copy.deepcopy(self.all_auctions)
-    #     list_of_dicts = []
-    #     for (id, a) in self.all_auctions.items():
-    #         list_of_dicts.append( a.to_dict() )
-    #     list_of_auctions = []
-    #     for d in list_of_dicts:
-    #         a = AuctionData()
-    #         a.update_from_dict(d)
-    #         list_of_auctions.append( a )
-    #     return list_of_auctions
     
     def get_all_auctions(self, request):
-        # return copy.deepcopy(self.all_auctions)
         list_of_dicts = []
         for (id, a) in self.all_auctions.items():
             list_of_dicts.append( a.to_dict() )
@@ -181,18 +168,18 @@ class Test_1:
             return server_ok, self.buyer_join_auction(request)
         elif request["op"] == "BUYER_QUIT_AUCTION":
             return server_ok, self.buyer_quit_auction(request)
-        elif request["op"] == "BUYER_FETCH_AUCTION":
+        elif request["op"] == "BUYER_FETCH_AUCTIONS":
             return server_ok, self.get_all_auctions(request)
         elif request["op"] == "SELLER_CREATE_AUCTION":
             return server_ok, self.create_auction(request)
         elif request["op"] == "SELLER_START_AUCTION":
             return server_ok, self.start_auction(request)
-        elif request["op"] == "SELLER_FETCH_AUCTION":
+        elif request["op"] == "SELLER_FETCH_AUCTIONS":
             return server_ok, self.get_all_auctions(request)
         elif request["op"] == "SELLER_FINISH_AUCTION":
             return server_ok, self.finish_auction(request)
         else:
-            raise Exception("operation" + request["op"] + " not supported!")
+            raise Exception("operation " + request["op"] + " not supported!")
 
         
 

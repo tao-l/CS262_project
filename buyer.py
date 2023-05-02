@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedLayout, QFormLayout, QGroupBox
-from PyQt6.QtWidgets import QListWidget, QLabel, QPushButton, QMessageBox, QTableWidget
+from PyQt6.QtWidgets import QListWidget, QLabel, QPushButton, QMessageBox
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, QObject, Qt
 
@@ -13,7 +13,7 @@ import threading
 import copy
 
 import utils
-from utils import UserData, AuctionData, ItemData, price_to_string, RPC_Address
+from utils import UserData, AuctionData, ItemData, price_to_string
 
 import test_toolkit
 import logging
@@ -52,10 +52,10 @@ class Buyer(QObject):
         self.rpc = Buyer_RPC_Servicer(self)
         rpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=64))
         auction_pb2_grpc.add_BuyerServiceServicer_to_server(self.rpc, rpc_server)
-        rpc_server.add_insecure_port(rpc_address.ip + ":" + rpc_address.port)
+        rpc_server.add_insecure_port(rpc_address)
         rpc_server.start()
         threading.Thread(target=rpc_server.wait_for_termination, daemon=True).start()
-        print(f"Buyer {self.data.username} RPC server started.")
+        print(f"Buyer {self.data.username} RPC server started at {rpc_address}.")
 
         # Finally, update UI (by emitting signal to notify the UI component)
         # self.ui_update_all_signal.emit()
@@ -242,7 +242,7 @@ class Buyer(QObject):
     
 
     def get_all_auctions_from_server(self):
-        request = { "op": "BUYER_FETCH_AUCTION",
+        request = { "op": "BUYER_FETCH_AUCTIONS",
                     "username": self.data.username }
         server_ok, response = self.rpc_to_server(request)
         if not server_ok:

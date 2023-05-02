@@ -170,10 +170,10 @@ def string_to_number_and_check_range(s, lb, ub):
     return (True, number, "good")
 
 
-class RPC_Address:
-    def __init__(self, ip="", port=""):
-        self.ip = ip
-        self.port = port
+# class RPC_Address:
+#     def __init__(self, ip="", port=""):
+#         self.ip = ip
+#         self.port = port
 
 
 
