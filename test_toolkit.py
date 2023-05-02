@@ -68,19 +68,19 @@ class Test_1:
             self.all_auctions[auction_id] = auction
 
 
-    def get_all_auctions(self):
-        # return copy.deepcopy(self.all_auctions)
-        list_of_dicts = []
-        for (id, a) in self.all_auctions.items():
-            list_of_dicts.append( a.to_dict() )
-        list_of_auctions = []
-        for d in list_of_dicts:
-            a = AuctionData()
-            a.update_from_dict(d)
-            list_of_auctions.append( a )
-        return list_of_auctions
+    # def get_all_auctions(self):
+    #     # return copy.deepcopy(self.all_auctions)
+    #     list_of_dicts = []
+    #     for (id, a) in self.all_auctions.items():
+    #         list_of_dicts.append( a.to_dict() )
+    #     list_of_auctions = []
+    #     for d in list_of_dicts:
+    #         a = AuctionData()
+    #         a.update_from_dict(d)
+    #         list_of_auctions.append( a )
+    #     return list_of_auctions
     
-    def get_all_auctions_request(self, request):
+    def get_all_auctions(self, request):
         # return copy.deepcopy(self.all_auctions)
         list_of_dicts = []
         for (id, a) in self.all_auctions.items():
@@ -98,7 +98,18 @@ class Test_1:
                                   price_increment_period = request["price_increment_period"],
                                   increment = request["increment"])
         self.all_auctions[new_auction_id] = new_auction
-        return True, "success"
+        return {"success": True, "message":"success"}
+    
+
+    def start_auction(self, request):
+        auction_id = request["auction_id"]
+        auction = self.all_auctions[auction_id]
+        assert request["username"] == auction.seller.username
+        assert auction.finished == False
+        if auction.started == True:
+            return {"success": True, "message": "success"}
+        else:
+            return {"success": True, "message": auction.to_dict()}
     
 
     def buyer_join_auction(self, request):
@@ -158,7 +169,16 @@ class Test_1:
         elif request["op"] == "BUYER_QUIT_AUCTION":
             return server_ok, self.buyer_quit_auction(request)
         elif request["op"] == "BUYER_FETCH_AUCTION":
-            return server_ok, self.get_all_auctions_request(request)
+            return server_ok, self.get_all_auctions(request)
+        elif request["op"] == "SELLER_CREATE_AUCTION":
+            return server_ok, self.create_auction(request)
+        elif request["op"] == "SELLER_START_AUCTION":
+            return server_ok, self.start_auction(request)
+        elif request["op"] == "SELLER_FETCH_AUCTION":
+            return server_ok, self.get_all_auctions(request)
+        else:
+            raise Exception("operation" + request["op"] + " not supported!")
+
         
 
 

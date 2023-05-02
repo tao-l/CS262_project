@@ -10,7 +10,7 @@ import auction_pb2 as pb2
 
 import time
 import threading
-from queue import Queue
+import copy
 
 import utils
 from utils import UserData, AuctionData, ItemData, price_to_string
@@ -59,7 +59,7 @@ class Seller(QObject):
 
         def data_fetch_loop():
             while True:
-                self.fetch_auctions_from_server()
+                self.fetch_auctions_from_server_and_update()
                 time.sleep(1)
         threading.Thread(target=data_fetch_loop, daemon=True).start()
 
@@ -226,7 +226,7 @@ class Seller(QObject):
                 (e.g., called by the multi-threaded RPC servicer).
                 Lock is needed in the implementation. 
         """
-        print(f"Seller [{self.data.username}]: finishing [{auction_id}]")
+        logging.info(f"Seller [{self.data.username}]: finishing [{auction_id}]")
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
                 return
@@ -253,7 +253,7 @@ class Seller(QObject):
                     )
         
         # Notify all buyers that this auction is finished
-        print(f"Seller: auction [{auction_id}] is finished. Starts to notify buyers.")
+        logging.info(f"Seller: auction [{auction_id}] is finished. Starts to notify buyers.")
         for b in auction.buyers:
             threading.Thread(target = self.send_rpc_request_to_buyer,
                              args = ("finish_auction", b, rpc_request), 
@@ -268,34 +268,36 @@ class Seller(QObject):
     
 
     def send_rpc_request_to_buyer(self, rpc_name, buyer, request):
+        """ Seller sends a RPC request to buyer 
+            - Input:
+                - rpc_name : "announce_price" or "finish_auction"
+                - buyer    : the username of the buyer receiving this RPC request
+                - request  : a pb2 RPC request object
+            - Return: 
+                - a bool   : successful or not
+                - a response or error message : buyer's response or error message
+        """  
         logging.debug(f"Seller sending RPC request {rpc_name} to {buyer}")
-        if buyer not in self.data.rpc_stubs:
-            (got_address, result) = self.find_address_from_server(buyer)
-            if got_address:
-                channel = grpc.insecure_channel(result.ip + ":" + result.port)
-                stub = auction_pb2_grpc.BuyerServiceStub(channel)
-                with self.data.lock:
-                    self.data.rpc_stubs[buyer] = stub
-            else:
-                err_message = f"Cannot find buyer's network address."
-                return False, err_message
-        
-        stub = self.data.rpc_stubs[buyer]
+        # First, get the buyer's RPC service stub
+        with self.data.lock:
+            if buyer not in self.data.rpc_stubs:
+                return False, "Cannot find buyer's RPC stub."
+            stub = self.data.rpc_stubs[buyer]
+        # Then, try to make the request
         try:
             if rpc_name == "finish_auction":
-                print(f"Seller sending RPC to {buyer}: finish_auction")
+                logging.debug(f"Seller sending RPC to {buyer}: finish_auction")
                 response = stub.finish_auction(request)
-                print("Seller got response")
-                success = True
+                logging.debug(f"Seller got response from {buyer}")
             elif rpc_name == "announce_price":
                 response = stub.announce_price(request)
-                success = True
+            else:
+                raise Exception(f"Buyer RPC service [{rpc_name}] not supported!")
         except grpc.RpcError as e:
             logging.debug(e)
-            return False, f"Cannot contact with buyer. Network error!"
-        return success, response
+            return False, f"Cannot contact with buyer!"
+        return True, response
     
-
     
     def price_increment_loop(self, auction_id):
         """ A loop that continuously increases the price of acution [auction_id], 
@@ -325,28 +327,44 @@ class Seller(QObject):
     def start_auction(self, auction_id, resume=False):
         """ Seller starts auction [auction_id].
 
-            Parameters:
-            - auction_id (str)  : the id of the auction to start. 
-            - resume     (bool) : indicates whether this auction is resumed from a previously started but paused auction. 
+            Input:
+                - auction_id (str)  : the id of the auction to start. 
+                - resume     (bool) : indicates whether this auction is resumed from a previously started but paused auction. 
+            Return:
+                (bool, str) : whether the operation is successful and error message if not successful
         """
-        test_toolkit.test_1.all_auctions[auction_id].started = True
+        # First, ask the platform to start the auction 
+        request = { "op" : "SELLER_START_AUCTION", 
+                    "username" : self.data.username, 
+                    "auction_id" : auction_id}
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            return False, "Cannot start auction: Server Error"
+        if response["success"] == False:
+            return False, "Cannot start auction:" + response["message"]
         
+        # If the auction is started the first time (not resumed), then update the information of the auction
+        if resume == False:
+            with self.data.lock:
+                self.data.my_auctions[auction_id].update_from_dict(response["message"])
+
         # First, obtain the acution (buyer) information from the platform:
         # auction = test_toolkit.Test_1.get_auction_info(auction_id)
-        auction = self.data.my_auctions[auction_id]
+        # auction = self.data.my_auctions[auction_id]
 
-        # Then, obtain the RPC address of all buyers:
-        for buyer in auction.buyers:
-            (got_address, result) = self.find_address_from_server(buyer)
-            if got_address:
-                channel = grpc.insecure_channel(result.ip + ":" + result.port)
-                stub = auction_pb2_grpc.BuyerServiceStub(channel)
-                with self.data.lock:
-                    self.data.rpc_stubs[buyer] = stub
+        # Then, update the address (RPC stub) of all buyers in this auction:
+        # for buyer in self.my_auctions[auction_id].buyers:
+        #     (got_address, result) = self.find_address_from_server(buyer)
+        #     if got_address:
+        #         channel = grpc.insecure_channel(result.ip + ":" + result.port)
+        #         stub = auction_pb2_grpc.BuyerServiceStub(channel)
+        #         with self.data.lock:
+        #             self.data.rpc_stubs[buyer] = stub
+        self.update_buyer_stubs_in_auction(auction_id)
         
-        # Then, change the auction to started stage
+        # Then, change the auction to the started stage
         with self.data.lock:
-            self.data.my_auctions[auction_id] = auction
+            auction = self.data.my_auctions[auction_id]
             auction.started = True
             if not resume:
                 # If the auction is started from scratch, reset round_id and current_price 
@@ -364,41 +382,68 @@ class Seller(QObject):
 
     def create_auction(self, auction_name, item, base_price, period, increment):
         logging.info("Seller {self.data.username} trying to create auction: {auction_name}, {item.name}, {base_price}, {period}, {increment}")
-        request = {}
-        request["op"] = "SELLER_CREATE_AUCTION"
-        request["seller_username"] = self.data.username
-        request["auction_name"] = auction_name
-        request["item_name"] = item.name
-        request["item_description"] = item.description
-        request["base_price"] = base_price
-        request["price_increment_period"] = period
-        request["increment"] = increment
-        success, message = test_toolkit.test_1.create_auction(request)
+        request = { "op": "SELLER_CREATE_AUCTION", 
+                    "seller_username": self.data.username, 
+                    "auction_name": auction_name, 
+                    "item_name": item.name, 
+                    "item_description": item.description,
+                    "base_price": base_price,
+                    "price_increment_period": period,
+                    "increment": increment }
+        server_ok, response = self.rpc_to_server(request)
         # If create_auction does not succeed, return error message
-        if not success:
-            return success, message
+        if not server_ok:
+            return False, "Cannot create auction: Server Error."
+        if response['success']:
+            return False, "Cannot create auction: " + response["message"]
         # Otherwise (succeeded), fetch auction data (including the newly created auction) from server
-        self.fetch_auctions_from_server()
-        return success, message
+        self.fetch_auctions_from_server_and_update()
+        return True, "success"
+
+    
+    def get_address_from_server(self, username):
+        """ Get the address of user [username] from the server """
+        # Make a RPC request and send to the server
+        request = { "op": "GET_USER_ADDRESS", 
+                    "username": username }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            return False, f"Cannot get the address of {username}: Server Error."
+        if response["success"] == False:
+            return False, f"Cannot get the address of {username}: " + response["message"]
+        # at this point, the operation is successful.  Return True and the address in response["message"]
+        return True, response["message"]
     
 
-    def find_address_from_server(self, username):
-        return test_toolkit.test_1.find_address_from_server(username)
-    
+    def update_buyer_stubs_in_auction(self, auction_id):
+        """ Update the addresses (RPC stubs) of buyers in auction [auction_id] """
+        # Copy the list of buyers in the auction (for thread-safety)
+        with self.data.lock:
+            buyers = copy.deepcopy(self.data.my_auctions[auction_id].buyers)
+        # For each buyer, update their address
+        for b in buyers:
+            ok, address = self.get_address_from_server(b)
+            print(" =================================", b, address)
+            if ok:
+                # if got the address, create a RPC stub with the address
+                channel = grpc.insecure_channel(address)
+                stub = auction_pb2_grpc.BuyerServiceStub(channel)
+                with self.data.lock:
+                    self.data.rpc_stubs[b] = stub
 
     
     def fetch_data_from_server(self):
         """ Fetch all data (auctions & addresses) from the platform to update the local data. """
         # First, fetch all the auction data
-        self.fetch_auctions_from_server()
+        self.fetch_auctions_from_server_and_update()
         # Then, fetch the RPC addresses of all buyers
     
     
-    def fetch_auctions_from_server(self):
+    def fetch_auctions_from_server_and_update(self):
         """ Fetch all the auctions of this seller from the platform to update the local data. """
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
-        # print(f"Before fetching auctions from server", self.data.my_auctions)
-        platform_auctions = self.get_all_auctions_from_server()
+        ok, platform_auctions = self.get_all_auctions_from_server()
+        if not ok: return 
         
         for pa in platform_auctions:
             if pa.seller.username != self.data.username:
@@ -408,18 +453,18 @@ class Seller(QObject):
             with self.data.lock:
                 if pa.id in self.data.my_auctions:
                     # For an auction that is in both platforms and seller's data, 
-                    #  - If the auction is finished: replace the seller's data with the platform's:
+                    # - If the auction is finished: replace the seller's data with the platform's:
                     if pa.finished:
                         logging.debug(f" Fetch: update {pa.id}: finished")
                         self.data.my_auctions[pa.id] = pa
                         continue
-                    #  - If the auction is not started and not finished: replace the seller's data with the platform's:  
+                    # - If the auction is not started and not finished: replace the seller's data with the platform's:  
                     elif not pa.started:
                         logging.debug(f" Fetch: update {pa.id}: not started")
                         self.data.my_auctions[pa.id] = pa
                         continue 
-                    #  - Otherwise, the auction is started and not finished:
-                    #    Do not change the seller's data because the auction is taken cared of by the seller now
+                    # - Otherwise, the auction is started and not finished:
+                    #   Do not change the seller's data because the auction is taken cared of by the seller now
                     else:
                         continue
                 else:
@@ -433,13 +478,35 @@ class Seller(QObject):
                     self.data.my_auctions[pa.id] = pa
                     
         
-        # print(f"After fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
         # If the auction lists needs to update, update the entire UI, 
         if auction_list_needs_update:
             self.ui_update_all_signal.emit()
         else:
         # Otherwise, just update the auction part of the UI. 
-            self.ui_update_auctions_signal.emit() 
+            self.ui_update_auctions_signal.emit()
+    
+
+    def get_all_auctions_from_server(self):
+        request = { "op": "SELLER_FETCH_AUCTION",
+                    "username": self.data.username }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            logging.info(f"Seller [{self.data.username}] tries to fetch auctions from server: FAIL: server error")
+            return False, None
+        if response["success"] == False:
+            logging.info(f"Seller [{self.data.username}] tries to fetch auctions from server: FAIL:" + response["message"])
+            return False, None
+        list_of_auctions = []
+        for d in response["message"]:
+            a = AuctionData()
+            a.update_from_dict(d)
+            list_of_auctions.append(a)
+        return True, list_of_auctions
+    
+
+
+    def rpc_to_server(self, request):
+        return test_toolkit.test_1.rpc_to_server(request)
 
 
 

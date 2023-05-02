@@ -291,7 +291,7 @@ class Buyer(QObject):
         return True, "success"
     
 
-    def find_address_from_server(self, username):
+    def get_address_from_server(self, username):
         request = { "op": "GET_USER_ADDRESS", 
                     "username": username }
         server_ok, response = self.rpc_to_server(request)
@@ -306,7 +306,7 @@ class Buyer(QObject):
     def update_seller_address_in_all_auctions(self):
         for auction in self.data.auctions.values():
             seller_username = auction.seller.username
-            ok, address = self.find_address_from_server(seller_username)
+            ok, address = self.get_address_from_server(seller_username)
             if ok:
                 # if got the address, create a RPC stub with the address
                 channel = grpc.insecure_channel(address)
