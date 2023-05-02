@@ -9,7 +9,7 @@ class Test_1:
         buyer_2 = UserData("buyer_2")
         buyer_3 = UserData("buyer_3")
 
-        for i in range(7):
+        for i in range(9):
             seller = UserData(f"seller_{i}")
             item = ItemData(f"item_{i}")
             base_price = i
@@ -56,6 +56,14 @@ class Test_1:
                 auction.winner_username = "buyer_3"
                 auction.transaction_price = 99999
             
+            
+            if i == 7:
+                auction.started = False
+                auction.finished = True
+                auction.buyers[buyer_1.username] = True
+                auction.winner_username = ""
+                auction.transaction_price = 99999
+
             self.all_auctions[auction_id] = auction
 
 
