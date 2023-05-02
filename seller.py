@@ -80,16 +80,16 @@ class Seller(QObject):
     def withdraw(self, auction_id, username):
         """ Withdraw a buyer from an auction. 
         
-        - Input:
-            - auction_id (str)  :  the id of the auction the buyer is withdrawing from
-            - username   (str)  :  the username of the buyer
-        - Output:
-            - success    (bool) :  whether the withdrawing operation is successful or not
-            - message    (str)  :  error message if not successful
-        * Note:
-            This function may be called by multiple threads simultaneously
-            (e.g., called by the multi-threaded RPC servicer and when announce_price cannot reach this buyer).
-            Lock is needed in the implementation. 
+            - Input:
+                - auction_id (str)  :  the id of the auction the buyer is withdrawing from
+                - username   (str)  :  the username of the buyer
+            - Output:
+                - success    (bool) :  whether the withdrawing operation is successful or not
+                - message    (str)  :  error message if not successful
+            * Note:
+                This function may be called by multiple threads simultaneously
+                (e.g., called by the multi-threaded RPC servicer and when announce_price cannot reach this buyer).
+                Lock is needed in the implementation. 
         """ 
         logging.info(f" Seller {self.data.username}: tries to withdraw {username} from  {auction_id}")
         with self.data.lock:
@@ -146,36 +146,27 @@ class Seller(QObject):
     def announce_price_to_all(self, auction_id, requires_ack):
         """ Announce price to all the buyers in auction [auction_id].
 
-        - Parameter:
-            - auction_id   (str) : the id of the auction
-            - requires_ack (bool): specifies whether the seller requires acknowledgement from buyers. 
-                 If requires_ack = True, then a buyer who does not acknowledge will be withdrawn. 
-            
-        * Note : this function may be called frequently if the price increment period increment is small. 
+            - Parameters:
+                - auction_id   (str) : the id of the auction
+                - requires_ack (bool): specifies whether the seller requires acknowledgement from buyers. 
+                    If requires_ack = True, then a buyer who does not acknowledge will be withdrawn. 
+            * Note:
+                this function may be called frequently if the price increment period increment is small. 
         """
         # create an announce_price RPC request
-        request = pb2.AnnouncePriceRequest()
+        
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
                 return
             auction = self.data.my_auctions[auction_id]
 
-            request.auction_id = auction_id
-            request.round_id = auction.round_id
-            request.price = auction.current_price
-            request.buyer_status.extend( auction.get_buyer_status_list() )
-            # for b in auction.buyers:
-            #     request.buyer_status.append(
-            #             pb2.BuyerStatus(username=b, active=auction.is_active(b))
-            #         )
+            request = pb2.AnnouncePriceRequest(
+                            auction_id   = auction_id, 
+                            round_id     = auction.round_id, 
+                            price        = auction.current_price, 
+                            buyer_status = auction.get_buyer_status_list() )
         
         logging.debug(f" Annouce-price request:   {auction_id}, {request.buyer_status}")
-        
-        # # broadcast the request to all buyers in the auction
-        # for b in auction.buyers:
-        #     threading.Thread(target = self.send_rpc_request_to_buyer,
-        #                      args = ("announce_price", b, request), 
-        #                      daemon = True).start()
 
         # Broadcast the request to all buyers in the auction. 
         for b in auction.buyers:
@@ -185,19 +176,29 @@ class Seller(QObject):
     
 
     def announce_price_to_buyer(self, auction_id, request, buyer, requires_ack):
+        """ Announce price to a specific buyer.
+
+            - Parameters:
+                - auction_id   (str) : the id of the auction.
+                - request      : pb2.AnnouncePriceRequest
+                - buyer        (str) : the username of the buyer. 
+                - requires_ack (bool): specifies whether the seller requires acknowledgement from the buyer. 
+                    If requires_ack = True, then a buyer who does not acknowledge will be withdrawn. 
+            * Note:
+                this function may be called frequently if the price increment period increment is small. 
+        """
         logging.info(f"Announce_price sending to {buyer},  requiring ack = {requires_ack}...")
         success, response = self.RPC_to_buyer("announce_price", request, buyer)
         logging.info(f"Announce_price for {buyer} success = {success}")
         if requires_ack:
-            # if requires acknowlegement, 
-            # then a buyer who does not acknowledge the request is withdrawn 
+            # if requires acknowlegement, then a buyer who does not acknowledge the request is withdrawn 
             if not success:
                 logging.info(f"  Withdrawing {buyer}")
                 self.withdraw(auction_id, buyer)
     
 
     def finish_auction(self, auction_id, has_winner=True):
-        """ Finish an auction and notify buyers. 
+        """ Finish an auction and notify the buyers and the platform. 
             
             - Input:
                 auction_id (str)  :  the id of the auction to finish
@@ -221,16 +222,12 @@ class Seller(QObject):
                 # the case that the auction does not have a winner when finishing
                 auction.winner_username = ""
                 auction.transaction_price = auction.base_price
+
             rpc_request = pb2.FinishAuctionRequest(
-                            auction_id = auction_id,
+                            auction_id      = auction_id,
                             winner_username = auction.winner_username, 
-                            price = auction.transaction_price
-                 )
-            
-            for b in auction.buyers:
-                rpc_request.buyer_status.append(
-                        pb2.BuyerStatus(username=b, active=auction.is_active(b))
-                    )
+                            price           = auction.transaction_price,
+                            buyer_status    = auction.get_buyer_status_list() )
         
         # Notify all buyers that this auction is finished
         logging.info(f"Seller: auction [{auction_id}] is finished. Starts to notify buyers.")
@@ -239,16 +236,21 @@ class Seller(QObject):
                              args = ("finish_auction", rpc_request, b), 
                              daemon = True).start()
         
+        # Notify the platform that this auction is finished
+        threading.Thread(target = self.tell_server_auction_finished, 
+                         args   = (auction_id,), 
+                         daemon = True).start()
+        
         # At this point, the finish auction operation is completed.
         # The seller's UI needs to be updated. 
         # So, we emit a signal to notify the UI to update.
-        # (We do not update the UI directly here
-        #  becasue the UI update is time consuming and must be single-threaded.)
+        # (We do not update the UI directly here becasue the UI update is time consuming and is done in another thread.)
         self.ui_update_auctions_signal.emit()
     
 
     def RPC_to_buyer(self, rpc_name, request, buyer):
-        """ Seller sends a RPC request to buyer 
+        """ Seller sends a RPC request to buyer
+
             - Input:
                 - rpc_name : "announce_price" or "finish_auction"
                 - request  : RPC request object (pb2.AnnouncePriceRequest or pb2.FinishAuctionRequest) 
@@ -279,24 +281,18 @@ class Seller(QObject):
         return True, response
     
 
-    # def RPC_to_buyer(self, rpc_name, request, buyer):
-    #     # First, get the buyer's RPC stub
-    #     with self.data.lock:
-    #         if buyer not in self.data.rpc_stubs:
-    #             return False, f"Does not have buyer's RPC stub."
-    #         stub = self.data.rpc_stubs[buyer]
-    #     # Then, try to make the RPC call
-    #     try:
-    #         if rpc_name == "announce_price":
-    #             response = stub.announce_price(request)
-    #         elif rpc_name == "finish_auction":
-    #             response = stub.finish_auction(request)
-    #         else:
-    #             raise Exception(f"RPC {rpc_name} not supported")
-    #     except grpc.RpcError as e:
-    #         # logging.debug(e)
-    #         return False, "RPC error"
-    #     return True, response
+    def tell_server_auction_finished(self, auction_id):
+        """ Tell the platform that auction [auction_id] is finished,
+            also send auction data to the platform to update
+        """
+        with self.data.lock:
+            request = self.data.my_auctions[auction_id].to_dict()
+            request["op"] = "SELLER_FINISH_AUCTION"
+        # repeatedly send the request to the server until the server acknowledges
+        while True:
+            server_ok, respone = self.rpc_to_server(request)
+            if server_ok:
+                break
     
     
     def price_increment_loop(self, auction_id):

@@ -112,6 +112,18 @@ class Test_1:
             auction.started = True
             return {"success": True, "message": auction.to_dict()}
     
+    
+    def finish_auction(self, request):
+        auction_id = request["auction_id"]
+        if self.all_auctions[auction_id].finished == True: 
+            print(f" ====================== Platform: auction {auction_id} trying to finish ----- already finished ----------")
+            return {"success": True, "message" : "Auction already finished"}
+        else:
+            print(f" ======================= Platform: auction {auction_id} trying to finish ----- good ----------")
+            assert request["finished"] == True
+            self.all_auctions[auction_id].update_from_dict(request)
+            return {"success": True, "message" : "Auction finished successfully"}
+    
 
     def buyer_join_auction(self, request):
         auction_id = request["auction_id"]
@@ -177,6 +189,8 @@ class Test_1:
             return server_ok, self.start_auction(request)
         elif request["op"] == "SELLER_FETCH_AUCTION":
             return server_ok, self.get_all_auctions(request)
+        elif request["op"] == "SELLER_FINISH_AUCTION":
+            return server_ok, self.finish_auction(request)
         else:
             raise Exception("operation" + request["op"] + " not supported!")
 
