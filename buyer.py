@@ -62,7 +62,7 @@ class Buyer(QObject):
         # Finally, start a loop to periodically fetch data from the platform and update the UI.
         threading.Thread(target = self.data_fetch_loop, daemon=True).start()
     
-
+    
     def ui_update(self, mode):
         data_copy = Data()
         with self.data.lock:
@@ -75,17 +75,139 @@ class Buyer(QObject):
             self.ui.update_auctions(data_copy)
     
 
+    def handle_announce_price(self, request):
+        """ Handle seller's announce_price RPC request
+            - Input [request] is an [auction_pb2.AnnouncePriceRequest] object
+        """
+        auction_id = request.auction_id
+        round_id = request.round_id
+        price = request.price
+        buyer_status = request.buyer_status
+        logging.info(f"Buyer {self.data.username} receives annouce_price [{auction_id}], price=[{price}]")
+
+        # Acquire lock before modifying data
+        with self.data.lock:
+            if auction_id not in self.data.auctions:
+                return
+            auction = self.data.auctions[auction_id]
+
+            # If seller's round_id  <  buyer's round_id on record: 
+            #   This means that the seller's annouce_price request is out-of-date, just ignore the request
+            if round_id < auction.round_id:
+                return
+            
+            # From now on, we have seller's round_id  >=  buyer's round_id
+            # We first sync the two round_ids: 
+            auction.round_id = round_id
+
+            if round_id > -1:
+                # round_id > -1 means that the auction is started
+                auction.started = True
+            
+            # Update price:
+            auction.current_price = price
+            # Update the status of buyers in this auction (some buyers may have withdrawn)
+            auction.update_buyer_status(buyer_status)
+        
+        # After the operation, the UI needs to be updated. 
+        # So, we emit a signal to notify the UI to update.
+        # We use a signal because the UI update is time-consuming and is done in another thread. 
+        self.ui_update_auctions_signal.emit()
+    
+
+    def handle_finish_auction(self, request):
+        """ Handle seller's finish_auction RPC request
+            - Input [request] is an [auction_pb2.FinishAuctionRequest] object
+        """
+        # Obtain information from the request
+        auction_id = request.auction_id
+        winner_username = request.winner_username
+        transaction_price = request.price
+        buyer_status = request.buyer_status
+        logging.info(f"Buyer {self.data.username} receives finish_auction RPC, auction = {auction_id}")
+        
+        # Acquire lock before modifying the data
+        with self.data.lock:
+            if auction_id not in self.data.auctions:
+                return
+            # Update the data
+            auction = self.data.auctions[auction_id]
+            auction.finished = True
+            auction.winner_username = winner_username
+            auction.transaction_price = transaction_price
+            auction.update_buyer_status(buyer_status)
+        
+        # After the data is updated, the UI needs to be updated. 
+        # We emit a signal to notify the UI to update.
+        # We use a signal because the UI update is time-consuming and is done in another thread. 
+        self.ui_update_auctions_signal.emit()
+    
+
+    
+    def withdraw(self, auction_id):
+        """ Perform the operation that the buyer (self) withdraw from an auction
+            - Input:
+                - auction_id (str)  : the id of the auction the buyer is withdrawing from
+            - Return:
+                - success    (bool) : whether this operation is successful or not
+                - message    (str)  : error message if not successful
+        """
+        if auction_id not in self.data.auctions:
+            return False, f"Auction {auction_id} does not exists!"
+        
+        # get this auction's seller's username and RPC stub
+        with self.data.lock:
+            seller_username = self.data.auctions[auction_id].seller.username
+            if seller_username not in self.data.rpc_stubs:
+                return False, f"Cannot find seller's network address."
+            stub = self.data.rpc_stubs[seller_username]
+        
+        # # check whether this buyer has the seller's RPC service address
+        # if seller_username not in self.data.rpc_stubs:
+        #     # if not, get the address from the server
+        #     (got_address, result) = self.find_address_from_server(seller_username)
+        #     if got_address:
+        #         # if got the address, create a RPC stub with the address
+        #         channel = grpc.insecure_channel(result.ip + ":" + result.port)
+        #         stub = auction_pb2_grpc.SellerServiceStub(channel)
+        #         with self.data.lock:
+        #             self.data.rpc_stubs[seller_username] = stub
+        #     else:
+        #         # if cannot get the address, return NOT SUCCESSFUL
+        #         return False, f"Cannot find seller's network address."
+        
+        # At this point, we should have the seller's RPC stub.
+        # Send a withdraw request to the seller using the stub and return the response 
+        request = pb2.UserAuctionPair()
+        request.auction_id = auction_id
+        request.username = self.data.username
+        try:
+            response = stub.withdraw(request)
+            success, message = response.success, response.message
+        except grpc.RpcError as e:
+            print(e)
+            success, message = False, f"Cannot withdraw. Network error!"
+        
+        return success, message
+    
+
+    def rpc_to_server(self, request):
+        return test_toolkit.test_1.rpc_to_server(request)
+
+
     def data_fetch_loop(self):
         while True:
-            self.fetch_auctions_from_server()
+            self.fetch_auctions_from_server_and_update()  # first, fetch all auctions from server
+            self.update_seller_address_in_all_auctions()  # then, update the addresses of sellers in those auctions
             time.sleep(1)
     
 
-    def fetch_auctions_from_server(self):
+    def fetch_auctions_from_server_and_update(self):
         """ Fetch all auctions from the platform to update the local data. """
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
-        platform_auctions = self.get_all_auctions_from_server()
-        
+        ok, platform_auctions = self.get_all_auctions_from_server()
+        if not ok: return 
+
         for pa in platform_auctions:
             with self.data.lock:
                 if pa.id in self.data.auctions:
@@ -119,159 +241,78 @@ class Buyer(QObject):
             self.ui_update_auctions_signal.emit() 
     
 
-    def handle_announce_price(self, request):
-        """ Handle seller's announce_price RPC request
-            - Input [request] is an [auction_pb2.AnnouncePriceRequest] object
-        """
-        auction_id = request.auction_id
-        round_id = request.round_id
-        price = request.price
-        buyer_status = request.buyer_status
-        logging.info(f"{self.data.username} receives annouce_price [{auction_id}], price=[{price}]")
-
-        # Acquire lock before modifying data
-        with self.data.lock:
-            if auction_id not in self.data.auctions:
-                return
-            auction = self.data.auctions[auction_id]
-
-            # If seller's round_id  <  buyer's round_id on record: 
-            #   This means that the seller's annouce_price request is out-of-date, just ignore the request
-            if round_id < auction.round_id:
-                return
-            
-            # From now on, we have seller's round_id  >=  buyer's round_id
-            # We first sync the two round_ids: 
-            auction.round_id = round_id
-
-            if round_id > -1:
-                # round_id > -1 means that the auction is started
-                auction.started = True
-            
-            # Update price:
-            auction.current_price = price
-            # Update the status of buyers in this auction (some buyers may have withdrawn)
-            auction.update_buyer_status(buyer_status)
-        
-        # After the operation, the UI needs to be updated. 
-        # So, we emit a signal to notify the UI to update.
-        # We use a signal because the UI update is time-consuming and is done in another thread. 
-        self.ui_update_auctions_signal.emit()
-    
-
-    def handle_finish_auction(self, request):
-        # Obtain information from the request
-        auction_id = request.auction_id
-        winner_username = request.winner_username
-        transaction_price = request.price
-        buyer_status = request.buyer_status
-        logging.info(f"Buyer {self.data.username} receives finish_auction RPC, auction = {auction_id}")
-        
-        # Acquire lock before modifying the data
-        with self.data.lock:
-            if auction_id not in self.data.auctions:
-                return
-            # Update the data
-            auction = self.data.auctions[auction_id]
-            auction.finished = True
-            auction.winner_username = winner_username
-            auction.transaction_price = transaction_price
-            auction.update_buyer_status(buyer_status)
-        
-        # After the data is updated, the UI needs to be updated. 
-        # We emit a signal to notify the UI to update.
-        # We use a signal because the UI update is done in another thread. 
-        self.ui_update_auctions_signal.emit()
-    
-
     def get_all_auctions_from_server(self):
-        return test_toolkit.test_1.get_all_auctions()
-    
+        request = { "op": "BUYER_FETCH_AUCTION",
+                    "username": self.data.username }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            logging.info(f"Buyer [{self.data.username}] tries to fetch auctions from server: FAIL, server error")
+            return False, None
+        if response["success"] == False:
+            logging.info(f"Buyer [{self.data.username}] tries to fetch auctions from server: FAIL, reason:" + response["message"])
+            return False, None
+        list_of_auctions = []
+        for d in response["message"]:
+            a = AuctionData()
+            a.update_from_dict(d)
+            list_of_auctions.append(a)
+        return True, list_of_auctions
+
+
     def join_auction(self, auction_id):
         logging.info(f"Buyer [{self.data.username}] tries to join auction [{auction_id}]")
-        request = {}
-        request["op"] = "BUYER_JOIN_AUCTION"
-        request["username"] = self.data.username
-        request["auction_id"] = auction_id
-        success, result = self.rpc_to_server(request)
-        if not success:
-            return success, "Cannot join this auction"
+        request = {"op": "BUYER_JOIN_AUCTION", 
+                   "username": self.data.username, 
+                   "auction_id": auction_id }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            return False, "Server error. Please try again." 
+        if response["success"] == False:
+            return False, "Cannot join this auction. Reason:" + response["message"]
         logging.info(f" Buyer [{self.data.username}] tries to join auction [{auction_id}]: success")
         # At this point, the operation is successful. Fetch auction data from server to update the UI.
-        self.fetch_auctions_from_server()
-        return success, "success"
+        self.fetch_auctions_from_server_and_update()
+        return True, "success"
     
 
     def quit_auction(self, auction_id):
         logging.info(f" Buyer [{self.data.username}] tries to quit from auction [{auction_id}]")
-        request = {}
-        request["op"] = "BUYER_QUIT_AUCTION"
-        request["username"] = self.data.username
-        request["auction_id"] = auction_id
-        success, result = self.rpc_to_server(request)
-        if not success:
-            return success, "Cannot quit from this auction"
+        request = {"op": "BUYER_QUIT_AUCTION", 
+                   "username": self.data.username,
+                   "auction_id": auction_id }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            return False, "Server error. Please try again." 
+        if response["success"] == False:
+            return False, "Cannot quit from this auction. Reason:" + response["message"]
         logging.info(f"  Buyer [{self.data.username}] tries to quit from auction [{auction_id}]: success")
         # At this point, the operation is successful. Fetch auction data from server to update the UI.
-        self.fetch_auctions_from_server()
-        return success, "success"
-    
-
-    def rpc_to_server(self, request):
-        if request["op"] == "BUYER_JOIN_AUCTION":
-            return test_toolkit.test_1.buyer_join_auction(request)
-        if request["op"] == "BUYER_QUIT_AUCTION":
-            return test_toolkit.test_1.buyer_quit_auction(request)
-
-
-    """ Perform the operation that the buyer (self) withdraw from an auction
-        - Input:
-            - auction_id (str)  : the id of the auction the buyer is withdrawing from
-        - Return:
-            - success    (bool) : whether this operation is successful or not
-            - message    (str)  : error message if not successful
-    """
-    def withdraw(self, auction_id):
-        if auction_id not in self.data.auctions:
-            return False, f"Auction {auction_id} does not exists!"
-        
-        # get the seller's id of the auction
-        with self.data.lock:
-            seller_username = self.data.auctions[auction_id].seller.username
-        
-        # check whether this buyer has the seller's RPC service address
-        if seller_username not in self.data.rpc_stubs:
-            # if not, get the address from the server
-            (got_address, result) = self.find_address_from_server(seller_username)
-            if got_address:
-                # if got the address, create a RPC stub with the address
-                channel = grpc.insecure_channel(result.ip + ":" + result.port)
-                stub = auction_pb2_grpc.SellerServiceStub(channel)
-                with self.data.lock:
-                    self.data.rpc_stubs[seller_username] = stub
-            else:
-                # if cannot get the address, return NOT SUCCESSFUL
-                return False, f"Cannot find seller's network address."
-        
-        # at this point, we should have the seller's RPC stub
-        stub = self.data.rpc_stubs[seller_username]
-        request = pb2.UserAuctionPair()
-        request.auction_id = auction_id
-        request.username = self.data.username
-        # try to send the withdrawing request to the seller using the stub
-        # and return the response 
-        try:
-            response = stub.withdraw(request)
-            success, message = response.success, response.message
-        except grpc.RpcError as e:
-            print(e)
-            success, message = False, f"Cannot withdraw. Network error!"
-        
-        return success, message
+        self.fetch_auctions_from_server_and_update()
+        return True, "success"
     
 
     def find_address_from_server(self, username):
-        return test_toolkit.test_1.find_address_from_server(username)
+        request = { "op": "GET_USER_ADDRESS", 
+                    "username": username }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            return False, f"Cannot get the address of {username}: Server Error."
+        if response["success"] == False:
+            return False, f"Cannot get the address of {username}: " + response["message"]
+        # at this point, the operation is successful.  Return True and the address in response["message"]
+        return True, response["message"]
+    
+
+    def update_seller_address_in_all_auctions(self):
+        for auction in self.data.auctions.values():
+            seller_username = auction.seller.username
+            ok, address = self.find_address_from_server(seller_username)
+            if ok:
+                # if got the address, create a RPC stub with the address
+                channel = grpc.insecure_channel(address)
+                stub = auction_pb2_grpc.SellerServiceStub(channel)
+                with self.data.lock:
+                    self.data.rpc_stubs[seller_username] = stub
 
 
 

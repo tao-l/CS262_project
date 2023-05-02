@@ -176,17 +176,21 @@ class RPC_Address:
         self.port = port
 
 
-def find_address_from_server(username):
-    # return test_toolkit.Example_1.find_address_from_server(username)
-    pass
+
+import grpc
+import json
 
 
-
-def rpc_to_server(self, request):
-    if request["op"] == "BUYER_JOIN_AUCTION":
-        return test_toolkit.test_1.buyer_join_auction(request)
-    if request["op"] == "BUYER_QUIT_AUCTION":
-        return test_toolkit.test_1.buyer_quit_auction(request)
+# class pb2_Response():
+# def rpc_to_server(request, stubs):
+#     pb2_request = json.dumps(request)
+#     for s in stubs:
+#         try:
+#             pb2_response = s.platform_service(pb2_request)
+#             if pb2_response.is_leader == True:
+#                 return (True, json.loads(pb2_response.json))
+#         except grpc.RpcError as e:
+#             print(e)
 
 
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem

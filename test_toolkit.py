@@ -1,5 +1,6 @@
 from utils import *
 import copy
+import logging
 
 class Test_1:
     def __init__(self):
@@ -79,6 +80,13 @@ class Test_1:
             list_of_auctions.append( a )
         return list_of_auctions
     
+    def get_all_auctions_request(self, request):
+        # return copy.deepcopy(self.all_auctions)
+        list_of_dicts = []
+        for (id, a) in self.all_auctions.items():
+            list_of_dicts.append( a.to_dict() )
+        return {"success": True, "message":list_of_dicts}
+    
     
     def create_auction(self, request):
         new_auction_id = f"auction_id_{len(self.all_auctions)}"
@@ -97,39 +105,61 @@ class Test_1:
         auction_id = request["auction_id"]
         buyer_id = request["username"]
         if auction_id not in self.all_auctions:
-            return False, "Auction does not exists"
+            return {"success": False, "message": "Auction does not exists"}
         auction = self.all_auctions[auction_id]
         if auction.started == True:
-            return False, "Auction has started"
+            return {"success": False, "message": "Auction has started"} 
         if auction.finished == True:
-            return False, "Auction has finished"
+            return {"success": False, "message": "Auction has finished"} 
         
         auction.buyers[buyer_id] = True
-        return True, "Success"
+        return {"success": True, "message": "Success"}
     
     def buyer_quit_auction(self, request):
         auction_id = request["auction_id"]
         buyer_id = request["username"]
         if auction_id not in self.all_auctions:
-            return False, "Auction does not exists"
+            return {"success": False, "message": "Auction does not exists"}
         auction = self.all_auctions[auction_id]
         if auction.started == True:
-            return False, "Auction has started. Cannot "
+            return {"success": False, "message": "Auction has started. Cannot quit."} 
         if auction.finished == True:
-            return False, "Auction has finished"
+            return {"success": False, "message": "Auction has finished"}
         if buyer_id in auction.buyers:
             auction.buyers.pop(buyer_id)
-        return True, "Success"
+        return {"success": True, "message": "Success"}
 
 
     def find_address_from_server(self, username):
         if username == "seller_2":
-            return True, RPC_Address(ip="127.0.0.1", port="60000")
+            return True, "127.0.0.1:60000"
         elif username == "buyer_1":
-            return True, RPC_Address(ip="127.0.0.1", port="60001")
+            return True, "127.0.0.1:60001"
         elif username == "buyer_3":
-            return True, RPC_Address(ip="127.0.0.1", port="60003")
-        return False, None
+            return True, "127.0.0.1:60003"
+        return False, f"Cannot find the address of {username}"
+    
+
+    def rpc_to_server(self, request):
+        """ rpc_to_server for testing.
+        
+        - Input: request : a dictionary
+        - Output: (server_ok, response), where
+            - server_ok : bool
+            - response  : a dictionary
+        """
+        logging.debug("Test 1: rpc_to_server, request:", request)
+        server_ok = True
+        if request["op"] == "GET_USER_ADDRESS":
+            success, addr = self.find_address_from_server(request["username"])
+            return server_ok, {"success": success, "message":addr}
+        elif request["op"] == "BUYER_JOIN_AUCTION":
+            return server_ok, self.buyer_join_auction(request)
+        elif request["op"] == "BUYER_QUIT_AUCTION":
+            return server_ok, self.buyer_quit_auction(request)
+        elif request["op"] == "BUYER_FETCH_AUCTION":
+            return server_ok, self.get_all_auctions_request(request)
+        
 
 
 test_1 = Test_1()
