@@ -39,8 +39,6 @@ class AuctionData():
         self.started = False
         self.finished = False
         
-        self.resume = False  # If a seller application restarts and fetches from the platform a previously started auction, this auction needs to be resumed.
-
         # For auction that has been started, need current_price and round_id
         self.current_price = base_price
         self.round_id = -1
@@ -52,8 +50,10 @@ class AuctionData():
         # A dictionary that records the (usernames of) buyers that have joined this auction
         # and whether they are active, e.g., buyers[username] = True (active)
         self.buyers = {}
-    
 
+        # The following field is used for seller's UI.  No need to include when updating auctions to server
+        self.resume = False  # If a seller application restarts and fetches from the platform a previously started auction, this auction needs to be resumed.
+    
     
     def is_active(self, username):
         """ Return whether buyer [username] is active in this auction. """
@@ -139,6 +139,14 @@ class RPC_Address:
 def find_address_from_server(username):
     # return test_toolkit.Example_1.find_address_from_server(username)
     pass
+
+
+
+def rpc_to_server(self, request):
+    if request["op"] == "BUYER_JOIN_AUCTION":
+        return test_toolkit.test_1.buyer_join_auction(request)
+    if request["op"] == "BUYER_QUIT_AUCTION":
+        return test_toolkit.test_1.buyer_quit_auction(request)
 
 
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
