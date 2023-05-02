@@ -68,7 +68,16 @@ class Test_1:
 
 
     def get_all_auctions(self):
-        return copy.deepcopy(self.all_auctions)
+        # return copy.deepcopy(self.all_auctions)
+        list_of_dicts = []
+        for (id, a) in self.all_auctions.items():
+            list_of_dicts.append( a.to_dict() )
+        list_of_auctions = []
+        for d in list_of_dicts:
+            a = AuctionData()
+            a.update_from_dict(d)
+            list_of_auctions.append( a )
+        return list_of_auctions
     
     
     def create_auction(self, request):
@@ -124,3 +133,7 @@ class Test_1:
 
 
 test_1 = Test_1()
+
+if __name__ == "__main__":
+    list_of_auctions = test_1.get_all_auctions()
+    print(list_of_auctions[1].id, list_of_auctions[1].buyers)

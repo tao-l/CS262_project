@@ -1,4 +1,5 @@
 import auction_pb2 as pb2
+import copy
 
 class UserData():
     def __init__(self, username=""):
@@ -45,7 +46,7 @@ class AuctionData():
 
         # For auction that has finished, need transaction_price and winner
         self.transaction_price = base_price
-        self.winner_username = None
+        self.winner_username = ""
 
         # A dictionary that records the (usernames of) buyers that have joined this auction
         # and whether they are active, e.g., buyers[username] = True (active)
@@ -64,7 +65,7 @@ class AuctionData():
     
     def n_active_buyers(self):
         """ Return the number of buyers that are active in this auction. 
-        (Can be used to check whether this auction is finished.)
+            (Can be used to check whether this auction is finished.)
         """
         active = 0
         for b in self.buyers:
@@ -107,6 +108,45 @@ class AuctionData():
             if self.is_active(buyer):
                 return buyer
         return None
+
+
+    def to_dict(self):
+        d = {}
+        d["auction_name"] = self.name
+        d["auction_id"] = self.id
+        d["seller_username"] = self.seller.username
+        d["item_name"] = self.item.name
+        d["item_description"] = self.item.description
+        d["base_price"] = self.base_price
+        d["started"] = self.started
+        d["finished"] = self.finished
+        d["current_price"] = self.current_price
+        d["round_id"] = self.round_id 
+        d["winner_username"] = self.winner_username 
+        d["transaction_price"] = self.transaction_price
+        d["price_increment_period"] = self.price_increment_period
+        d["increment"] = self.increment
+        d["buyers"] = copy.deepcopy(self.buyers)
+        return d
+    
+
+    def update_from_dict(self, d):
+        self.name = d["auction_name"] 
+        self.id = d["auction_id"]
+        self.seller.username = d["seller_username"]
+        self.item.name = d["item_name"]
+        self.item.description = d["item_description"] 
+        self.base_price = d["base_price"]
+        self.started = d["started"]
+        self.finished = d["finished"]
+        self.current_price = d["current_price"]
+        self.round_id = d["round_id"]
+        self.winner_username = d["winner_username"]
+        self.transaction_price = d["transaction_price"]
+        self.price_increment_period = d["price_increment_period"]
+        self.increment = d["increment"]
+        self.buyers = copy.deepcopy(d["buyers"])
+
 
 
 def price_to_string(price):

@@ -400,23 +400,23 @@ class Seller(QObject):
         # print(f"Before fetching auctions from server", self.data.my_auctions)
         platform_auctions = self.get_all_auctions_from_server()
         
-        for (id, pa) in platform_auctions.items():
+        for pa in platform_auctions:
             if pa.seller.username != self.data.username:
                 # ignore auctions that are not this seller's
                 continue
 
             with self.data.lock:
-                if id in self.data.my_auctions:
+                if pa.id in self.data.my_auctions:
                     # For an auction that is in both platforms and seller's data, 
                     #  - If the auction is finished: replace the seller's data with the platform's:
                     if pa.finished:
-                        logging.debug(f" Fetch: update {id}: finished")
-                        self.data.my_auctions[id] = pa
+                        logging.debug(f" Fetch: update {pa.id}: finished")
+                        self.data.my_auctions[pa.id] = pa
                         continue
                     #  - If the auction is not started and not finished: replace the seller's data with the platform's:  
                     elif not pa.started:
-                        logging.debug(f" Fetch: update {id}: not started")
-                        self.data.my_auctions[id] = pa
+                        logging.debug(f" Fetch: update {pa.id}: not started")
+                        self.data.my_auctions[pa.id] = pa
                         continue 
                     #  - Otherwise, the auction is started and not finished:
                     #    Do not change the seller's data because the auction is taken cared of by the seller now
@@ -425,12 +425,13 @@ class Seller(QObject):
                 else:
                     # For an auction that is in the platform's data but in the seller's, 
                     # add this auction to the seller's auction list
-                    logging.debug(f" Fetch: update {id}: new auction")
-                    self.data.my_auctions[id] = pa
+                    logging.debug(f" Fetch: update {pa.id}: new auction")
                     auction_list_needs_update = True
                     # If this auction has started, set "resume = True" so that the UI will show a "resume" button
                     if pa.started:
                         pa.resume = True
+                    self.data.my_auctions[pa.id] = pa
+                    
         
         # print(f"After fetching auctions from server", self.data.my_auctions["auction_id_5"].buyers)
         # If the auction lists needs to update, update the entire UI, 

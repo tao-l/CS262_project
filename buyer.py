@@ -86,19 +86,19 @@ class Buyer(QObject):
         auction_list_needs_update = False   # records whether the auciton list in the UI needs to be updated
         platform_auctions = self.get_all_auctions_from_server()
         
-        for (id, pa) in platform_auctions.items():
+        for pa in platform_auctions:
             with self.data.lock:
-                if id in self.data.auctions:
+                if pa.id in self.data.auctions:
                     # For an auction that is in both platforms and buyer's data, 
                     #  - If the auction is finished: replace the buyer's data with the platform's:
                     if pa.finished:
-                        logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: finished")
-                        self.data.auctions[id] = pa
+                        logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{pa.id}]: finished")
+                        self.data.auctions[pa.id] = pa
                         continue
                     #  - If the auction is not started and not finished: replace the buyer's data with the platform's:  
                     elif not pa.started:
-                        logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: not started")
-                        self.data.auctions[id] = pa
+                        logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{pa.id}]: not started")
+                        self.data.auctions[pa.id] = pa
                         continue 
                     #  - Otherwise, the auction is started and not finished:
                     #    Do not change the buyer's data because the auction is taken cared of by the seller now
@@ -107,8 +107,8 @@ class Buyer(QObject):
                 else:
                     # For an auction that is in the platform's data but in the buyer's, 
                     # add this auction to the buyer's auction list
-                    logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{id}]: new auction")
-                    self.data.auctions[id] = pa
+                    logging.debug(f" Buyer [{self.data.username}] fetch: update auction [{pa.id}]: new auction")
+                    self.data.auctions[pa.id] = pa
                     auction_list_needs_update = True
         
         # If the auction lists needs to update, update the entire UI, 
