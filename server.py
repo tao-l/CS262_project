@@ -111,8 +111,8 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
             command = log_entry.command      # the Command object in auction.proto
             request  = json.loads(command.json) # convert it back to json
             op = request["op"]
-            if "username" in re: username = re["username"]
-            else: username = re["seller_username"]
+            if "username" in request: username = request["username"]
+            else: username = request["seller_username"]
 
 
             """ The following has been re-written compared to assignment 3"""

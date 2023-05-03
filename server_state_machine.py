@@ -18,7 +18,7 @@ class StateMachine:
         #      recoding the messages user_a received (and from which user):  
         #          messages[user_a] = [ (user_1, message_1), (user_2, message_2), ..., ] 
         #    - a lock to ensure only one command can be excecued at a time . 
-        self.accounts = []
+        self.accounts = {}
         self.auctions = [] # auction id starts from 1, each being a dictionary
         self.lock = threading.Lock()
     
