@@ -59,12 +59,8 @@ class Seller(QObject):
         threading.Thread(target=rpc_server.wait_for_termination, daemon=True).start()
         print("Seller RPC server started at", rpc_address)
 
-        # Start a loop to periodically fetch all data (auction and buyer address) from the platform """
-        def data_fetch_loop():
-            while True:
-                self.fetch_auctions_from_server_and_update()
-                time.sleep(1)
-        threading.Thread(target=data_fetch_loop, daemon=True).start()
+        # Start a loop to periodically sync information with the platform, see the definition of sync_information_loop() for details """
+        threading.Thread(target=self.sync_information_loop, args=(1,), daemon=True).start()
 
         # Finally, update UI (by emitting signal to notify the UI component)
         self.ui_update_all_signal.emit()
@@ -380,20 +376,50 @@ class Seller(QObject):
         return True, "success"
     
 
-    def fetch_all_data_from_server(self):
-        """ Fetch all data (auctions & addresses) from the platform to update the local data. """
-        # First, fetch all the auction data
-        self.fetch_auctions_from_server_and_update()
-        # Then, fetch the RPC addresses of all buyers in all auctions
-        #  (1) copy the auction ids for thread-safe reasons.
-        auction_ids = []
+    def sync_information_loop(self, interval = 1):
+        """ Periodically sync information with the platform """
+        while True:
+            # (1) Fetch all the auction data (and update the local data)
+            self.fetch_auctions_from_server_and_update()
+
+            # (2) Update the addresses (RPC stubs) of all buyers in all auctions
+            #   (2.1) copy the auction ids for thread-safety reasons
+            auction_ids = []
+            with self.data.lock:
+                for auction_id in self.data.my_auctions:
+                    auction_ids.append(auction_id)
+            #   (2.2) update the buyer stubs in each auction: 
+            for auction_id in auction_ids:
+                self.update_buyer_stubs_in_auction(auction_id)
+            
+            # (3) Push the data of all started auctions to the server
+            self.push_started_auction_data_to_server()
+            
+
+            time.sleep(interval)   # sleep for some time before next syncing 
+
+    
+    def push_started_auction_data_to_server(self):
+        """ Push the data of all started auctions to the platform
+            (because the latest information of started auctions is maintained by the seller).
+        """
+        # First, for thread-safety reason, copy the list of started (and not finished) auctions
+        started_auction_list = []
         with self.data.lock:
             for auction_id in self.data.my_auctions:
-                auction_ids.append(auction_id)
-        #  (2) update the buyer stubs in each auction: 
-        for auction_id in auction_ids:
-            self.update_buyer_stubs_in_auction(auction_id)
-    
+                if self.data.my_auctions[auction_id].started and not self.data.my_auctions[auction_id].finished:
+                    started_auction_list.append( auction_id )
+        # Then, for each auction in the list, update information to the server
+        logging.info(f"Pushing auction data to server {started_auction_list}")
+        for id in started_auction_list:
+            # Make a RPC request which copies the auction's data
+            with self.data.lock:
+                request = self.data.my_auctions[id].to_dict()
+                request["username"] = self.data.username
+                request["op"] = "SELLER_UPDATE_AUCTION"
+            # Then send this request to the server. Discard the response
+            self.rpc_to_server(request)
+
     
     def fetch_auctions_from_server_and_update(self):
         """ Fetch all the auctions of this seller from the platform to update the local data. """
