@@ -52,9 +52,6 @@ def get_my_ip_and_port():
         if str(port) + "\n" not in used_ports:
             break
         port += 1
-    # Write that port number to the file
-    with open("used_port_list.txt", "a") as f:
-        f.write(str(port) + "\n")
     
     # Return the IP address and the port (in string)
     return (ip_address, str(port))
@@ -132,7 +129,11 @@ class LoginPage(QWidget):
         # Get the input username 
         username = self.line_edit.text()
         # Get the input IP address and port number
-        rpc_address = self.ip_LE.text() + ":" + self.port_LE.text() 
+        port = self.port_LE.text()
+        rpc_address = self.ip_LE.text() + ":" + port
+        # Write that port number to the file
+        with open("used_port_list.txt", "a") as f:
+            f.write(port + "\n")
         # Call the MainWindow object's login() function 
         self.root.login(username, rpc_address, "buyer")
         
@@ -140,7 +141,11 @@ class LoginPage(QWidget):
         # Get the input username 
         username = self.line_edit.text()
         # Get the input IP address and port number
-        rpc_address = self.ip_LE.text() + ":" + self.port_LE.text() 
+        port = self.port_LE.text()
+        rpc_address = self.ip_LE.text() + ":" + port
+        # Write that port number to the file
+        with open("used_port_list.txt", "a") as f:
+            f.write(port + "\n")
         # Call the MainWindow object's login() function 
         self.root.login(username, rpc_address, "seller")
 

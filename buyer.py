@@ -334,7 +334,7 @@ class Buyer(QObject):
         if DEMON == True:
             with self.data.lock:
                 if username not in self.data.addresses or address != self.data.addresses[username]:
-                    self.message_to_display = f"User {username} RPC address changes to {address}"
+                    self.message_to_display = f"User [{username}] changes RPC address to {address}"
                     print(self.message_to_display)
                     self.ui_display_message_signal.emit()
                 self.data.addresses[username] = address
@@ -485,7 +485,7 @@ class Auction_Page_Base(QWidget):
 
         auction_name_label = QLabel(auction_data.name)
         auction_name_font = QFont()
-        auction_name_font.setPointSize(18)
+        auction_name_font.setPointSize(20)
         auction_name_label.setFont(auction_name_font)
         auction_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.mainlayout.addWidget(auction_name_label)

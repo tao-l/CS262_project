@@ -274,16 +274,19 @@ class StateMachine:
 
         if username not in self.accounts:
             msg = f"User {username} does not exist."
-            js = {"success": False, "message":msg}
+            js = {"success": False, "message": msg}
         elif auction_id > len(self.auctions):
             msg = f"Auction {auction_id} does not exist."
-            js = {"success": False, "message":msg}
+            js = {"success": False, "message": msg}
         elif self.auctions[auction_id-1]["finished"]:
             msg = f"Auction {auction_id} has already finished."
-            js = {"success":False, "message":msg}
+            js = {"success": False, "message": msg}
         elif self.auctions[auction_id-1]["started"]:
             msg = f"Auction {auction_id} has already started."
-            js = {"success": True, "message":msg}
+            js = {"success": True, "message": msg}
+        elif len( self.auctions[auction_id-1]["buyers"] ) == 0:
+            msg = f"Auction does not have any buyer."
+            js = {"success": False, "message": msg}
         else: # created status, write request
             self.auctions[auction_id-1]["started"] = True
             js = {"success":True, "message":self.auctions[auction_id-1]}
@@ -312,6 +315,7 @@ class StateMachine:
             js = {"success": True, "message":msg}
         else:
             # start write request
+            self.auctions[auction_id-1] = request
             self.auctions[auction_id-1]["finished"] = True
             msg = f"Auction {auction_id} successfully finished"
             js = {"success":True, "message":msg}

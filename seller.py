@@ -70,7 +70,6 @@ class Seller(QObject):
         self.ui_update_all_signal.emit()
     
 
-    
     def withdraw(self, auction_id, username):
         """ Withdraw a buyer from an auction. 
         
@@ -128,7 +127,6 @@ class Seller(QObject):
         self.announce_price_to_all(auction_id, requires_ack=False)
         print(f"                    After announce_price_to_all, ", self.data.my_auctions[auction_id].buyers)
         
-
         # At this point, the withdrawing operation is completed.
         # The seller's UI needs to be updated. 
         # So, we emit a signal to notify the UI to update.
@@ -148,7 +146,6 @@ class Seller(QObject):
                 this function may be called frequently if the price increment period increment is small. 
         """
         # create an announce_price RPC request
-        
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
                 return
@@ -282,6 +279,7 @@ class Seller(QObject):
         with self.data.lock:
             request = self.data.my_auctions[auction_id].to_dict()
             request["op"] = "SELLER_FINISH_AUCTION"
+            request["username"] = self.data.username
         # repeatedly send the request to the server until the server acknowledges
         while True:
             server_ok, respone = self.rpc_to_server(request)
@@ -338,19 +336,10 @@ class Seller(QObject):
             with self.data.lock:
                 self.data.my_auctions[auction_id].update_from_dict(response["message"])
 
-        # First, obtain the acution (buyer) information from the platform:
-        # auction = test_toolkit.Test_1.get_auction_info(auction_id)
-        # auction = self.data.my_auctions[auction_id]
-
         # Then, update the address (RPC stub) of all buyers in this auction:
-        # for buyer in self.my_auctions[auction_id].buyers:
-        #     (got_address, result) = self.find_address_from_server(buyer)
-        #     if got_address:
-        #         channel = grpc.insecure_channel(result.ip + ":" + result.port)
-        #         stub = auction_pb2_grpc.BuyerServiceStub(channel)
-        #         with self.data.lock:
-        #             self.data.rpc_stubs[buyer] = stub
-        self.update_buyer_stubs_in_auction(auction_id)
+        server_ok, message = self.update_buyer_stubs_in_auction(auction_id)
+        if not server_ok:
+            return False, "Cannot start auction: Server Error when finding addresses of buyers."
         
         # Then, change the auction to the started stage
         with self.data.lock:
@@ -396,7 +385,13 @@ class Seller(QObject):
         # First, fetch all the auction data
         self.fetch_auctions_from_server_and_update()
         # Then, fetch the RPC addresses of all buyers in all auctions
-        for auction_id in self.data.my_auctions:
+        #  (1) copy the auction ids for thread-safe reasons.
+        auction_ids = []
+        with self.data.lock:
+            for auction_id in self.data.my_auctions:
+                auction_ids.append(auction_id)
+        #  (2) update the buyer stubs in each auction: 
+        for auction_id in auction_ids:
             self.update_buyer_stubs_in_auction(auction_id)
     
     
@@ -480,12 +475,15 @@ class Seller(QObject):
     
 
     def update_buyer_stubs_in_auction(self, auction_id):
-        """ Update the addresses (RPC stubs) of buyers in auction [auction_id] """
+        """ Update the addresses (RPC stubs) of buyers in auction [auction_id]
+            - Return: (bool, str) : whether the operation is successful and error message
+        """
         # Copy the list of buyers in the auction (for thread-safety)
         with self.data.lock:
             if auction_id not in self.data.my_auctions:
-                return 
+                return False, f"When updating buyer stubs: no auction [auction_id]"
             buyers = copy.deepcopy(self.data.my_auctions[auction_id].buyers)
+        server_ok = True
         # For each buyer, update their address
         for b in buyers:
             ok, address = self.get_address_from_server(b)
@@ -495,6 +493,14 @@ class Seller(QObject):
                 stub = auction_pb2_grpc.BuyerServiceStub(channel)
                 with self.data.lock:
                     self.data.rpc_stubs[b] = stub
+            else:
+                server_ok = False  # otherwise, set server_ok flag to be False
+        # after updating, return result.
+        if server_ok:
+            return True, "all good"
+        else:
+            return False, "Server Error when updating buyer stubs"
+        
     
 
     def rpc_to_server(self, request):

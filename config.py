@@ -46,4 +46,5 @@ PLATFORM_READ_ONLY_OP = [GET_USER_ADDRESS, BUYER_FETCH_AUCTIONS, SELLER_FETCH_AU
 
 OPERATION_NOT_SUPPORTED = 404
 
-AUCTION_SHIELD_KEYS = ["buyers", "current_price", "round_id", "transaction_price", "winner_username"]
+# AUCTION_SHIELD_KEYS = ["buyers", "current_price", "round_id", "transaction_price", "winner_username"]
+AUCTION_SHIELD_KEYS = ["buyers", "current_price", "round_id"]   # The fields that a buyer who does not join an auction cannnot see
