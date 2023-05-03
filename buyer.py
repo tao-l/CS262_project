@@ -485,7 +485,7 @@ class Auction_Page_Base(QWidget):
 
         auction_name_label = QLabel(auction_data.name)
         auction_name_font = QFont()
-        auction_name_font.setPointSize(20)
+        auction_name_font.setPointSize(23)
         auction_name_label.setFont(auction_name_font)
         auction_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.mainlayout.addWidget(auction_name_label)
@@ -513,9 +513,12 @@ class Auction_Prestarted_Page(Auction_Page_Base):
         self.mainlayout.addWidget(QLabel(increment_message))
 
         buyers_view = QVBoxLayout()
-        buyers_view.addWidget(QLabel("Current buyers in the auction:"))
-        self.buyers_list = utils.UI_tools.make_buyer_list(auction_data, need_status=False)
-        buyers_view.addWidget(self.buyers_list)
+        if self.root_widget.data.username not in auction_data.buyers:
+            buyers_view.addWidget(QLabel("You cannot see the list of buyers because you haven't joined the auction."))
+        else:
+            buyers_view.addWidget(QLabel("Current buyers in the auction:"))
+            self.buyers_list = utils.UI_tools.make_buyer_list(auction_data, need_status=False)
+            buyers_view.addWidget(self.buyers_list)
         self.mainlayout.addLayout(buyers_view)
 
         if self.root_widget.data.username not in auction_data.buyers:

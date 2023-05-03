@@ -195,23 +195,33 @@ from PyQt6.QtCore import Qt
 
 class UI_tools:
     def make_buyer_list(auction_data, need_status=True, gray_background=False):
-        """ Make a list of buyers, including their active/withdraw status, from auciont_data """
+        """ Make a list of buyers from auciont_data
+            
+            Parameters:
+             - need_statuss : specifies whether to include the active/withdraw status of the buyer,
+             - gray_background : specifies whether to set the background to be gray
+        """
         buyer_list = QListWidget()
         for b in auction_data.buyers:
             item = QListWidgetItem(b)
+
             if need_status: 
-                if auction_data.is_active(b):
+                if auction_data.is_active(b): 
                     item = QListWidgetItem(b + " : " + "active")
-                    item.setForeground(Qt.GlobalColor.red)
                 else:
                     item = QListWidgetItem(b + " : " + "withdrawn")
             else:
                 item = QListWidgetItem(b)
+
+            if auction_data.is_active(b):
+                item.setForeground(Qt.GlobalColor.red)
+
             buyer_list.addItem(item)
         # buyer_list.setAutoFillBackground(True)
         # p = buyer_list.palette()
         # p.setColor(buyer_list.foregroundRole(), Qt.GlobalColor.red)
         # buyer_list.setPalette(p)
+        buyer_list.setStyleSheet("""QListWidget{font-size:18pt;}""")
         if gray_background:
-            buyer_list.setStyleSheet("""QListWidget{background: lightgray;}""")
+            buyer_list.setStyleSheet("""QListWidget{font-size:18pt; background: lightgray;}""")
         return buyer_list

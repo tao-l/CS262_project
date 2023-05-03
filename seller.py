@@ -1000,5 +1000,5 @@ class Auction_Finished_Page(QWidget):
         self.buyer_list.clear()
         for b in auction_data.buyers:
             self.buyer_list.addItem(b)
-        self.buyer_list.setStyleSheet("""QListWidget{background: lightgray;}""")
+        self.buyer_list.setStyleSheet("""QListWidget{font-size: 18pt; background: lightgray;}""")
 
