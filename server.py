@@ -111,8 +111,10 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
             command = log_entry.command      # the Command object in auction.proto
             request  = json.loads(command.json) # convert it back to json
             op = request["op"]
-            if "username" in request: username = request["username"]
-            else: username = request["seller_username"]
+            if "username" in request:
+                username = request["username"]
+            else:
+                username = request["seller_username"]
 
 
             """ The following has been re-written compared to assignment 3"""
@@ -150,7 +152,7 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
         my_client_port = self.replicas[id].client_port
         server.add_insecure_port(my_ip_addr + ":" + my_client_port)
         server.start()
-        print(f" ====== Chat server [{id}] starts at {my_ip_addr}:{my_client_port} =======")
+        print(f" ====== Server [{id}] starts at {my_ip_addr}:{my_client_port} =======")
         server.wait_for_termination()
 
 

@@ -18,12 +18,12 @@ class StateMachine:
         #      recoding the messages user_a received (and from which user):  
         #          messages[user_a] = [ (user_1, message_1), (user_2, message_2), ..., ] 
         #    - a lock to ensure only one command can be excecued at a time . 
-        self.accounts = {}
+        self.accounts = {} # a dictionary that maps users to their RPC service addresses.
         self.auctions = [] # auction id starts from 1, each being a dictionary
-        self.lock = threading.Lock()
+        self.lock = threading.Lock() #  a lock to ensure that only one command is excecued at a time, only used for debugging.  
     
     def check_buyer_in_auction(self, username, auction_id):
-        """ Check if buyer is a participant of the auction
+        """ Check if buyer has ever been a participant of the auction
             Both the buyer and the auction id must exist
             - Input:
                 username   : string, the username to be queried, string
@@ -50,7 +50,7 @@ class StateMachine:
         username = request["username"]
         
         self.accounts[username] = request["address"]
-        js = {"success":True,"message":"Login successful"}
+        js = {"success": True, "message": "Login successful"}
         response = pb2.PlatformServiceResponse(json=json.dumps(js))
         print(f"Account [{username}] logged in")
         return response
@@ -104,7 +104,7 @@ class StateMachine:
             if username in auction["buyers"]:
                 msg.append(auction)
             else:
-                # buyer not participating 
+                # buyer not ever participating 
                 auction_copy = {k:v for k,v in auction.items() if k not in config.AUCTION_SHIELD_KEYS}
                 msg.append(auction_copy)
         js = {"success":True, "message":msg}
@@ -136,7 +136,8 @@ class StateMachine:
                 # seller does not own this auction
                 auction_copy = {k:v for k,v in auction.items() if k not in config.AUCTION_SHIELD_KEYS}
                 msg.append(auction_copy)
-            js = {"success":True, "message":msg}
+        
+        js = {"success":True, "message":msg}
         response.json = json.dumps(js)
         return response
 
@@ -170,7 +171,7 @@ class StateMachine:
             js = {"success":True, "message":msg}
         else:
             # user not in auction buyer list. Add
-            self.auctions[auction_id-1]["buyers"].append(username)
+            self.auctions[auction_id-1]["buyers"][username] = True
             msg = f"Added user {username} to auction {auction_id}."
             js = {"success":True, "message":msg}
 
@@ -202,7 +203,7 @@ class StateMachine:
             js = {"success":False, "message":msg}
         else:
             # buyer in the auction, withdrawl
-            self.auctions[auction_id-1]["buyers"].remove(username)
+            self.auctions[auction_id-1]["buyers"].pop(username)
             msg = f"User {username} quitted from auction {auction_id}."
             js = {"success":True, "message":msg}
 
@@ -248,7 +249,7 @@ class StateMachine:
             auction_to_create["created"] = True
             auction_to_create["started"] = False
             auction_to_create["finished"] = False
-            auction_to_create["buyers"] = [] # use a list instead of set for json format
+            auction_to_create["buyers"] = {} # use a dictionary username:True (active) False(not active)
             auction_to_create["round_id"] = -1
             auction_to_create["current_price"] = request["base_price"]
             auction_to_create["transaction_price"] = -1

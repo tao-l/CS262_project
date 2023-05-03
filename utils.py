@@ -76,12 +76,9 @@ class AuctionData():
     
     def withdraw(self, username):
         """ Withdraw buyer [username] from the auction.
-            Return False if the buyer is not in the auction
+            Raise error if the buyer is not in the auction. 
         """
-        if username not in self.buyers:
-            return False
         self.buyers[username] = False
-        return True
     
     
     def update_buyer_status(self, buyer_status):
@@ -139,13 +136,16 @@ class AuctionData():
         self.base_price = d["base_price"]
         self.started = d["started"]
         self.finished = d["finished"]
-        self.current_price = d["current_price"]
-        self.round_id = d["round_id"]
-        self.winner_username = d["winner_username"]
-        self.transaction_price = d["transaction_price"]
+        self.current_price = d.get("current_price", 0)
+        self.round_id = d.get("round_id", -1)
+        self.winner_username = d.get("winner_username", "")
+        self.transaction_price = d.get("transaction_price", 0)
         self.price_increment_period = d["price_increment_period"]
         self.increment = d["increment"]
-        self.buyers = copy.deepcopy(d["buyers"])
+        if "buyers" in d:
+            self.buyers = copy.deepcopy(d["buyers"])
+        else:
+            self.buyers = {}
 
 
 
@@ -173,17 +173,21 @@ def string_to_number_and_check_range(s, lb, ub):
 import grpc
 import json
 
-
-# class pb2_Response():
-# def rpc_to_server(request, stubs):
-#     pb2_request = json.dumps(request)
-#     for s in stubs:
-#         try:
-#             pb2_response = s.platform_service(pb2_request)
-#             if pb2_response.is_leader == True:
-#                 return (True, json.loads(pb2_response.json))
-#         except grpc.RpcError as e:
-#             print(e)
+def rpc_to_server_stubs(request, stubs):
+    """ Make a RPC request to all the platform server replicas.
+        Return (True, response) if one of them responds (is leader).
+        Otherwise, return (False, None)
+    """
+    pb2_request = pb2.PlatformServiceRequest(json = json.dumps(request))
+    for s in stubs:
+        try:
+            pb2_response = s.rpc_platform_serve(pb2_request)
+            if pb2_response.is_leader == True:
+                return (True, json.loads(pb2_response.json))
+        except grpc.RpcError as e:
+            # print(e)
+            pass 
+    return False, None
 
 
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
