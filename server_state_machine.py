@@ -245,7 +245,7 @@ class StateMachine:
             js = {"success":False, "message":msg}
         else: # creating auction
             auction_id = len(self.auctions)+1
-            auction_to_create["auction_id"] = auction_id # starts from 1
+            auction_to_create["auction_id"] = str(auction_id) # starts from 1
             auction_to_create["created"] = True
             auction_to_create["started"] = False
             auction_to_create["finished"] = False
@@ -335,6 +335,9 @@ class StateMachine:
         elif auction_id > len(self.auctions):
             msg = f"Auction {auction_id} does not exist."
             js = {"success": False, "message":msg}
+        elif self.auctions[auction_id-1]["finished"] or not self.auctions[auction_id-1]["started"]:
+            msg = f"Auction {auction_id} has already finished or not started yet."
+            js = {"success":False, "message":msg}
         else: # change the status as seller demands
             self.auctions[auction_id-1] = request
             msg = f"Auction {auction_id} successfully updated."
