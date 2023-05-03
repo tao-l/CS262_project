@@ -52,11 +52,12 @@ class Seller(QObject):
         self.rpc = Seller_RPC_Servicer(self)
         rpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=64))
         auction_pb2_grpc.add_SellerServiceServicer_to_server(self.rpc, rpc_server)
-        rpc_server.add_insecure_port(rpc_address.ip + ":" + rpc_address.port)
+        rpc_server.add_insecure_port(rpc_address)
         rpc_server.start()
         threading.Thread(target=rpc_server.wait_for_termination, daemon=True).start()
-        print("Seller RPC server started at", rpc_address.ip + ":" + rpc_address.port)
+        print("Seller RPC server started at", rpc_address)
 
+        # Start a loop to periodically fetch all data (auction and buyer address) from the platform """
         def data_fetch_loop():
             while True:
                 self.fetch_auctions_from_server_and_update()
@@ -65,15 +66,6 @@ class Seller(QObject):
 
         # Finally, update UI (by emitting signal to notify the UI component)
         self.ui_update_all_signal.emit()
-    
-
-    def get_all_auctions_from_server(self):
-        return test_toolkit.test_1.get_all_auctions()
-    
-    def create_auction(self):
-        # new_auction = AuctionData(name="test auction", id="test_id_1", )
-        # auction_id = "test_auction"
-        pass
     
 
     
@@ -395,44 +387,15 @@ class Seller(QObject):
         # Otherwise (succeeded), fetch auction data (including the newly created auction) from server
         self.fetch_auctions_from_server_and_update()
         return True, "success"
-
-    
-    def get_address_from_server(self, username):
-        """ Get the address of user [username] from the server """
-        # Make a RPC request and send to the server
-        request = { "op": "GET_USER_ADDRESS", 
-                    "username": username }
-        server_ok, response = self.rpc_to_server(request)
-        if not server_ok:
-            return False, f"Cannot get the address of {username}: Server Error."
-        if response["success"] == False:
-            return False, f"Cannot get the address of {username}: " + response["message"]
-        # at this point, the operation is successful.  Return True and the address in response["message"]
-        return True, response["message"]
     
 
-    def update_buyer_stubs_in_auction(self, auction_id):
-        """ Update the addresses (RPC stubs) of buyers in auction [auction_id] """
-        # Copy the list of buyers in the auction (for thread-safety)
-        with self.data.lock:
-            buyers = copy.deepcopy(self.data.my_auctions[auction_id].buyers)
-        # For each buyer, update their address
-        for b in buyers:
-            ok, address = self.get_address_from_server(b)
-            print(" =================================", b, address)
-            if ok:
-                # if got the address, create a RPC stub with the address
-                channel = grpc.insecure_channel(address)
-                stub = auction_pb2_grpc.BuyerServiceStub(channel)
-                with self.data.lock:
-                    self.data.rpc_stubs[b] = stub
-
-    
-    def fetch_data_from_server(self):
+    def fetch_all_data_from_server(self):
         """ Fetch all data (auctions & addresses) from the platform to update the local data. """
         # First, fetch all the auction data
         self.fetch_auctions_from_server_and_update()
-        # Then, fetch the RPC addresses of all buyers
+        # Then, fetch the RPC addresses of all buyers in all auctions
+        for auction_id in self.data.my_auctions:
+            self.update_buyer_stubs_in_auction(auction_id)
     
     
     def fetch_auctions_from_server_and_update(self):
@@ -483,7 +446,7 @@ class Seller(QObject):
     
 
     def get_all_auctions_from_server(self):
-        request = { "op": "SELLER_FETCH_AUCTION",
+        request = { "op": "SELLER_FETCH_AUCTIONS",
                     "username": self.data.username }
         server_ok, response = self.rpc_to_server(request)
         if not server_ok:
@@ -500,6 +463,37 @@ class Seller(QObject):
         return True, list_of_auctions
     
 
+    def get_address_from_server(self, username):
+        """ Get the address of user [username] from the server """
+        # Make a RPC request and send to the server
+        request = { "op": "GET_USER_ADDRESS", 
+                    "username": username }
+        server_ok, response = self.rpc_to_server(request)
+        if not server_ok:
+            return False, f"Cannot get the address of {username}: Server Error."
+        if response["success"] == False:
+            return False, f"Cannot get the address of {username}: " + response["message"]
+        # at this point, the operation is successful.  Return True and the address in response["message"]
+        return True, response["message"]
+    
+
+    def update_buyer_stubs_in_auction(self, auction_id):
+        """ Update the addresses (RPC stubs) of buyers in auction [auction_id] """
+        # Copy the list of buyers in the auction (for thread-safety)
+        with self.data.lock:
+            if auction_id not in self.data.my_auctions:
+                return 
+            buyers = copy.deepcopy(self.data.my_auctions[auction_id].buyers)
+        # For each buyer, update their address
+        for b in buyers:
+            ok, address = self.get_address_from_server(b)
+            if ok:
+                # if got the address, create a RPC stub with the address
+                channel = grpc.insecure_channel(address)
+                stub = auction_pb2_grpc.BuyerServiceStub(channel)
+                with self.data.lock:
+                    self.data.rpc_stubs[b] = stub
+    
 
     def rpc_to_server(self, request):
         return test_toolkit.test_1.rpc_to_server(request)
@@ -672,15 +666,14 @@ class SellerUI(QWidget):
             return 
 
 
-    """ When user clicks the create auction button, do the following: """
     def create_button_clicked(self):
+        """ When user clicks the create auction button, do the following: """
         dialog = self.Create_Auction_Dialog(self, self.model)
         dialog.show()
 
 
-    
-    """ Update the UI of the auction displayed on screen """
     def update_displayed_auction(self):
+        """ Update the UI of the auction displayed on screen """
         w = self.empty_page
         if (self.auctions != None) and (self.selected_auction in self.auctions):
             # get the data of the selected auction
@@ -706,9 +699,9 @@ class SellerUI(QWidget):
         self.auction_started_page.update(self.auction_data)
         self.stacked_layout.setCurrentWidget(self.auction_started_page)
     
-    """ This function updates the entire UI, using the given new data
-    """
+    
     def update_all(self, data=None):
+        """ This function updates the entire UI, using the given new data """
         if data == None:
             data = self.model.data
         
@@ -716,18 +709,18 @@ class SellerUI(QWidget):
         self.update_auction_list(data.my_auctions)
         self.update_auctions(data.my_auctions)
     
-    """ This function only updates the auction list, given new auctions data
-    """
+    
     def update_auction_list(self, auctions):
+        """ This function only updates the auction list, given new auctions data """
         self.auction_list_widget.clear()
         self.auction_id_list = []
         for (auction_id, a) in auctions.items():
             self.auction_list_widget.addItem(a.name)
             self.auction_id_list.append(auction_id)
     
-    """ This function only updates the auction UI, given new auctions data
-    """
+    
     def update_auctions(self, auctions):
+        """ This function only updates the auction UI, given new auctions data """
         self.auctions = auctions
         self.update_displayed_auction()
         
@@ -788,10 +781,9 @@ class Auction_Starting_Page(QWidget):
             QMessageBox.critical(self, "", message)
     
 
-    """ This function is called when we need to update the UI
-        with new auction_data
-    """
+    
     def update(self, auction_data):
+        """ This function is called when we need to update the UI with new auction_data """
         self.auction_id = auction_data.id
         self.item_label.setText(auction_data.item.name)
         self.base_price_label.setText(price_to_string(auction_data.base_price))
@@ -844,10 +836,9 @@ class Auction_Started_Page(QWidget):
 
         self.setLayout(layout)
 
-    """ This function is called when we need to update the UI
-        with new auction_data
-    """
+    
     def update(self, auction_data):
+        """ This function is called when we need to update the UI with new auction_data """
         self.auction_id = auction_data.id
         self.item_label.setText(auction_data.item.name)
         self.current_price_label.setText(price_to_string(auction_data.current_price))
@@ -910,10 +901,9 @@ class Auction_Resume_Page(QWidget):
             QMessageBox.critical(self, "", message)
 
 
-    """ This function is called when we need to update the UI
-        with new auction_data
-    """
+    
     def update(self, auction_data):
+        """ This function is called when we need to update the UI with new auction_data """
         self.auction_id = auction_data.id
         self.item_label.setText(auction_data.item.name)
         self.current_price_label.setText(price_to_string(auction_data.current_price))
@@ -965,10 +955,9 @@ class Auction_Finished_Page(QWidget):
 
         self.setLayout(layout)
 
-    """ This function is called when we need to update the UI
-        with new auction_data
-    """
+   
     def update(self, auction_data):
+        """ This function is called when we need to update the UI with new auction_data """
         self.auction_id = auction_data.id
         self.item_label.setText(auction_data.item.name)
         self.winner_label.setText(auction_data.winner_username)
