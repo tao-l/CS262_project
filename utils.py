@@ -76,12 +76,9 @@ class AuctionData():
     
     def withdraw(self, username):
         """ Withdraw buyer [username] from the auction.
-            Return False if the buyer is not in the auction
+            Raise error if the buyer is not in the auction. 
         """
-        if username not in self.buyers:
-            return False
         self.buyers[username] = False
-        return True
     
     
     def update_buyer_status(self, buyer_status):
@@ -177,6 +174,10 @@ import grpc
 import json
 
 def rpc_to_server_stubs(request, stubs):
+    """ Make a RPC request to all the platform server replicas.
+        Return (True, response) if one of them responds (is leader).
+        Otherwise, return (False, None)
+    """
     pb2_request = pb2.PlatformServiceRequest(json = json.dumps(request))
     for s in stubs:
         try:
