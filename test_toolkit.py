@@ -5,6 +5,12 @@ import logging
 class Test_1:
     def __init__(self):
         self.all_auctions = {}
+        self.addresses = {}
+
+        self.addresses["seller_2"] = "127.0.0.1:60000"
+        self.addresses["buyer_1"] =  "127.0.0.1:60001"
+        self.addresses["buyer_3"] = "127.0.0.1:60003"
+        
 
         buyer_1 = UserData("buyer_1")
         buyer_2 = UserData("buyer_2")
@@ -66,8 +72,13 @@ class Test_1:
                 auction.transaction_price = 99999
 
             self.all_auctions[auction_id] = auction
-
     
+
+    def login(self, request):
+        self.addresses[request["username"]] = request["address"]
+        return {"success": True, "message": "Login successful"}
+    
+
     def get_all_auctions(self, request):
         list_of_dicts = []
         for (id, a) in self.all_auctions.items():
@@ -142,12 +153,8 @@ class Test_1:
 
 
     def find_address_from_server(self, username):
-        if username == "seller_2":
-            return True, "127.0.0.1:60000"
-        elif username == "buyer_1":
-            return True, "127.0.0.1:60001"
-        elif username == "buyer_3":
-            return True, "127.0.0.1:60003"
+        if username in self.addresses:
+            return True, self.addresses[username]
         return False, f"Cannot find the address of {username}"
     
 
@@ -178,14 +185,10 @@ class Test_1:
             return server_ok, self.get_all_auctions(request)
         elif request["op"] == "SELLER_FINISH_AUCTION":
             return server_ok, self.finish_auction(request)
+        elif request["op"] == "LOGIN":
+            return server_ok, self.login(request)
         else:
             raise Exception("operation " + request["op"] + " not supported!")
 
-        
-
 
 test_1 = Test_1()
-
-if __name__ == "__main__":
-    list_of_auctions = test_1.get_all_auctions()
-    print(list_of_auctions[1].id, list_of_auctions[1].buyers)
