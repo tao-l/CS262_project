@@ -1,2 +1,12 @@
 This file records the port numbers used by our client programs.
 A new client program will find a port number that is not in this list and then add that number to this list:
+40000
+40000
+40001
+40001
+40002
+40002
+40003
+40004
+40005
+40006

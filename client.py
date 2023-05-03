@@ -153,7 +153,7 @@ class LoginPage(QWidget):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = QApplication([])
-    app.setStyleSheet("QLabel, QLineEdit, QPushButton, QListWidget{font-size: 18pt;}")
+    app.setStyleSheet("QLabel, QLineEdit, QListWidget{font-size: 17pt;}")
     # custom_font = QFont()
     # custom_font.setWeight(40)
     # QApplication.setFont(custom_font, "QLabel")

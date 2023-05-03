@@ -221,7 +221,7 @@ class UI_tools:
         # p = buyer_list.palette()
         # p.setColor(buyer_list.foregroundRole(), Qt.GlobalColor.red)
         # buyer_list.setPalette(p)
-        buyer_list.setStyleSheet("""QListWidget{font-size:18pt;}""")
+        buyer_list.setStyleSheet("""QListWidget{font-size:17pt;}""")
         if gray_background:
-            buyer_list.setStyleSheet("""QListWidget{font-size:18pt; background: lightgray;}""")
+            buyer_list.setStyleSheet("""QListWidget{font-size:17pt; background: lightgray;}""")
         return buyer_list

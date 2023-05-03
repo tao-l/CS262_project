@@ -676,7 +676,7 @@ class SellerUI(QWidget):
                 QMessageBox.critical(self, "", error_message)
                 return 
             
-            (valid, period_in_seconds, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0.01, ub=100000)
+            (valid, period_in_seconds, error_message) = utils.string_to_number_and_check_range(self.period_LE.text(), lb=0.1, ub=100000)
             if not valid:
                 QMessageBox.critical(self, "", error_message)
                 return 
