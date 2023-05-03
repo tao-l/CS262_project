@@ -13,9 +13,10 @@ service SellerService {
 }
 
 service PlatformService {
-    rpc rpc_platform_serve(PlatformServiceRequest) returns (PlatformServiceResponse); 
-   
-    /*
+    rpc rpc_platform_serve(PlatformServiceRequest) returns (PlatformServiceResponse){} 
+}
+
+/*
     The below nine rpc services are combined into the one above. This is done to
     provide uniform structure for raft services
     
@@ -32,7 +33,7 @@ service PlatformService {
     rpc seller_update_auction(AuctionInfo) returns (SuccessMessage);
     rpc seller_fetch_auctions(User) returns (stream AuctionInfo);
     */
-}
+
 
 message UserAuctionPair {
     string username = 1;

@@ -13,6 +13,7 @@ import json
 from server_state_machine import StateMachine
 
 import raft
+import raft_pb2
 
 import config
 
@@ -59,20 +60,23 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
         
         # convert json to commands
         re  = json.loads(request.json)
+        op = re["op"]
+        if "username" in re: username = re["username"]
+        else: username = re["seller_username"]
 
-        # if the request is a read only request, directly read and respond
-        if re[op] in config.PLATFORM_READ_ONLY_OP:
-            logging.info(f" Platform: receives read only op={re[op]}, username = {re[username]}.")
-            return self.state_machine.apply(re)
+        # both read only and write only goes through raft
+        # # if the request is a read only request, directly read and respond
+        # if re["op"] in config.PLATFORM_READ_ONLY_OP:
+        #    logging.info(f" Platform: receives read only op={op}, username = {username}.")
+        #    return self.state_machine.apply(re)
 
         # if the request is write related request, use raft
-        logging.info(f" Platform: receives write op={re[op]}, username = {re[username]}.")
+        logging.info(f" Platform: receives op={op}, username = {username}.")
 
         # Try to add the request to the log, using RAFT:
         #   RAFT returns the index of the request in the log, 
         #   and whether the current server is the leader 
-        # auction_pb2.PlatformServiceRequest object is identical to raft.Command oject
-        # converting one to another for type casting 
+        # auction_pb2.PlatformServiceRequest object is identical to raft.Command oject, converting one to another for type casting 
         raft_command = raft_pb2.Command(json=request.json)
         (index, _, is_leader) = self.rf.new_entry(raft_command)
 
@@ -106,10 +110,14 @@ class PlatformServiceServicer(auction_pb2_grpc.PlatformServiceServicer):
             index = log_entry.index
             command = log_entry.command      # the Command object in auction.proto
             request  = json.loads(command.json) # convert it back to json
+            op = request["op"]
+            if "username" in re: username = re["username"]
+            else: username = re["seller_username"]
+
 
             """ The following has been re-written compared to assignment 3"""
             with self.lock:
-                logging.info(f"     Apply request index = {index},  op = {request[op]}, username = {request.username}")
+                logging.info(f"     Apply request index = {index},  op = {op}, username = {username}")
                 # apply the request, and (if needed) record the result and notify the waiting thread. 
                 if index not in self.results:
                     # This case means that the request is not initiated by the current server; 

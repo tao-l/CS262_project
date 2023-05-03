@@ -74,7 +74,31 @@ class StateMachineTestSellerRelated(unittest.TestCase):
         js = json.loads(response.json)
         self.assertFalse(js["success"])
         self.assertTrue("fully match" in js["message"])
+    
+    # same with seller_finish_auction
+    def test_seller_start_auction(self):
+        # success case
+        request = {"op":config.SELLER_START_AUCTION, "username":"test_seller", "auction_id":"1"}
+        response = self.sm.apply(request)
+        js = json.loads(response.json)
+        self.assertTrue(js["success"])
+        self.assertTrue("buyers" in js["message"])
 
+        # start a started case
+        self.sm.auctions[0]["started"] = True
+        request = {"op":config.SELLER_START_AUCTION, "username":"test_seller", "auction_id":"1"}
+        response = self.sm.apply(request)
+        js = json.loads(response.json)
+        self.assertTrue(js["success"])
+        self.assertTrue("has already started" in js["message"])
+
+        # start a finished case
+        self.sm.auctions[0]["finished"] = True
+        request = {"op":config.SELLER_START_AUCTION, "username":"test_seller", "auction_id":"1"}
+        response = self.sm.apply(request)
+        js = json.loads(response.json)
+        self.assertFalse(js["success"])
+        self.assertTrue("has already finished" in js["message"])
 
 class StateMachineTestBuyerRelated(unittest.TestCase):
     """
