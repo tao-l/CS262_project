@@ -38,11 +38,13 @@ class Seller(QObject):
     ui_update_auctions_signal = pyqtSignal()
     ui_update_all_signal = pyqtSignal()
 
-    def __init__(self, username, rpc_address):
+    def __init__(self, username, rpc_address, server_stubs):
         super().__init__()
 
         self.data = Data()
         self.data.username = username
+
+        self.server_stubs = server_stubs
 
         self.ui = SellerUI(self)
         self.ui_update_all_signal.connect(lambda : self.ui.update_all(self.data))
@@ -496,7 +498,8 @@ class Seller(QObject):
     
 
     def rpc_to_server(self, request):
-        return test_toolkit.test_1.rpc_to_server(request)
+        # return test_toolkit.test_1.rpc_to_server(request)
+        return utils.rpc_to_server_stubs(request, self.server_stubs)
 
 
 
@@ -691,7 +694,6 @@ class SellerUI(QWidget):
             
             # update the widget using auction data "a"
             w.update(a)
-            self.auction_box.setTitle(a.name)
         
         self.stacked_layout.setCurrentWidget(w)
 

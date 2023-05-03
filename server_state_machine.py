@@ -12,15 +12,9 @@ class StateMachine:
 
     def __init__(self):
         #  States/data of the state machine
-        #    - a list of all existing accounts/users (identified by their usernames) 
-        #    - a dictionary mapping users to the set of messages they received.
-        #      Specifically, messages[user_a] is a list of (user, message) pairs
-        #      recoding the messages user_a received (and from which user):  
-        #          messages[user_a] = [ (user_1, message_1), (user_2, message_2), ..., ] 
-        #    - a lock to ensure only one command can be excecued at a time . 
-        self.accounts = []
+        self.accounts = {} # a dictionary that maps users to their RPC service addresses.
         self.auctions = [] # auction id starts from 1, each being a dictionary
-        self.lock = threading.Lock()
+        self.lock = threading.Lock() #  a lock to ensure that only one command is excecued at a time, only used for debugging.  
     
     def check_buyer_in_auction(self, username, auction_id):
         """ Check if buyer is a participant of the auction
@@ -50,7 +44,7 @@ class StateMachine:
         username = request["username"]
         
         self.accounts[username] = request["address"]
-        js = {"success":True,"message":"Login successful"}
+        js = {"success": True, "message": "Login successful"}
         response = pb2.PlatformServiceResponse(json=json.dumps(js))
         print(f"Account [{username}] logged in")
         return response
@@ -136,7 +130,8 @@ class StateMachine:
                 # seller does not own this auction
                 auction_copy = {k:v for k,v in auction.items() if k not in config.AUCTION_SHIELD_KEYS}
                 msg.append(auction_copy)
-            js = {"success":True, "message":msg}
+        
+        js = {"success":True, "message":msg}
         response.json = json.dumps(js)
         return response
 

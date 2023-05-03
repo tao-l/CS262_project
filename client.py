@@ -7,10 +7,26 @@ from PyQt6.QtGui import QFont
 from buyer import Buyer
 from seller import Seller
 
-import utils
-import test_toolkit
-rpc_to_server = test_toolkit.test_1.rpc_to_server
+import grpc
+import auction_pb2_grpc
 
+import utils
+
+def get_server_stubs():
+    """ Get the RPC service stubs of the platform server replicas """
+    # First, get the ip addresses and ports of all replicas from the configuration file
+    import config
+    replicas  = config.replicas
+    n_replicas = len(replicas)
+    
+    # Then, for each pair of (ip, port), create a stub
+    stubs = []
+    for i in range(n_replicas):
+        channel = grpc.insecure_channel(replicas[i].ip_addr + ':' + replicas[i].client_port)
+        s = auction_pb2_grpc.PlatformServiceStub(channel)
+        stubs.append(s)
+    
+    return stubs
 
 def get_my_ip_and_port():
     """ This function is only for demonstration. It should not be used in a real system. 
@@ -58,7 +74,8 @@ class MainWindow(QMainWindow):
         request = { "op" : "LOGIN",
                     "username" : username,
                     "address":rpc_address  }
-        server_ok, response = rpc_to_server(request)
+        stubs = get_server_stubs()
+        server_ok, response = utils.rpc_to_server_stubs(request, stubs)
 
         # If not successful, display an error message and return 
         if not server_ok:
@@ -70,10 +87,10 @@ class MainWindow(QMainWindow):
         
         # Log in successfully. Display a Buyer window or a Seller window 
         if type == "buyer":
-            buyer = Buyer(username, rpc_address)
+            buyer = Buyer(username, rpc_address, stubs)
             self.setCentralWidget(buyer.ui)
         elif type == "seller":
-            seller = Seller(username, rpc_address)
+            seller = Seller(username, rpc_address, stubs)
             self.setCentralWidget(seller.ui)
 
 
@@ -131,6 +148,11 @@ class LoginPage(QWidget):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = QApplication([])
+    app.setStyleSheet("QLabel{font-size: 18pt;}")
+    # custom_font = QFont()
+    # custom_font.setWeight(40)
+    # QApplication.setFont(custom_font, "QLabel")
+
     window = MainWindow()
     window.show()
     app.exec()

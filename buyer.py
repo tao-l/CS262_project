@@ -46,11 +46,13 @@ class Buyer(QObject):
     ui_update_auctions_signal = pyqtSignal()
     ui_display_message_signal = pyqtSignal()
 
-    def __init__(self, username, rpc_address):
+    def __init__(self, username, rpc_address, server_stubs):
         super().__init__()
 
         self.data = Data()
         self.data.username = username
+
+        self.server_stubs = server_stubs
 
         self.ui = BuyerUI(self)
         self.ui_update_all_signal.connect(lambda : self.ui_update(mode="all"))
@@ -248,7 +250,8 @@ class Buyer(QObject):
     
 
     def rpc_to_server(self, request):
-        return test_toolkit.test_1.rpc_to_server(request)
+        # return test_toolkit.test_1.rpc_to_server(request)
+        return utils.rpc_to_server_stubs(request, self.server_stubs)
 
 
     def data_fetch_loop(self):

@@ -161,7 +161,7 @@ class RaftServiceServicer(raft_pb2_grpc.RaftServiceServicer):
     """
     def new_entry(self, command):
         logging.info(f"  RAFT [{self.my_id}] - new entry: " + command.json)   
-        with self.lock: 
+        with self.lock:
             if self.state != Leader:
                 logging.info(f"      RAFT [{self.my_id}]: not leader, cannot add entry")
                 return (-1, self.current_term, False)
