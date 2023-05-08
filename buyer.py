@@ -71,10 +71,11 @@ class Buyer(QObject):
         threading.Thread(target=rpc_server.wait_for_termination, daemon=True).start()
         print(f"Buyer {self.data.username} RPC server started at {rpc_address}.")
 
-        # Finally, update UI (by emitting signal to notify the UI component)
-        # self.ui_update_all_signal.emit()
-        # Finally, start a loop to periodically fetch data from the platform and update the UI.
+        # Start a loop to periodically fetch data from the platform and update the UI.
         threading.Thread(target = self.data_fetch_loop, daemon=True).start()
+
+        # Finally, update UI (by emitting signal to notify the UI component)
+        self.ui_update_all_signal.emit()
     
     
     def ui_update(self, mode):
@@ -168,7 +169,6 @@ class Buyer(QObject):
         # We use a signal because the UI update is time-consuming and is done in another thread. 
         self.ui_update_auctions_signal.emit()
     
-
     
     def withdraw(self, auction_id):
         """ Perform the operation that the buyer (self) withdraw from an auction
@@ -188,21 +188,6 @@ class Buyer(QObject):
                 return False, f"Cannot find seller's network address."
             stub = self.data.rpc_stubs[seller_username]
         
-        # # check whether this buyer has the seller's RPC service address
-        # if seller_username not in self.data.rpc_stubs:
-        #     # if not, get the address from the server
-        #     (got_address, result) = self.find_address_from_server(seller_username)
-        #     if got_address:
-        #         # if got the address, create a RPC stub with the address
-        #         channel = grpc.insecure_channel(result.ip + ":" + result.port)
-        #         stub = auction_pb2_grpc.SellerServiceStub(channel)
-        #         with self.data.lock:
-        #             self.data.rpc_stubs[seller_username] = stub
-        #     else:
-        #         # if cannot get the address, return NOT SUCCESSFUL
-        #         return False, f"Cannot find seller's network address."
-        
-        # At this point, we should have the seller's RPC stub.
         # Send a withdraw request to the seller using the stub and return the response 
         request = pb2.UserAuctionPair()
         request.auction_id = auction_id

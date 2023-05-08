@@ -17,7 +17,7 @@ service PlatformService {
 }
 
 /*
-    The below nine rpc services are combined into the one above. This is done to
+    The below 10 rpc services are combined into the one above. This is done to
     provide uniform structure for raft services
     
     rpc login(User_Address) returns (SuccessMessage); 

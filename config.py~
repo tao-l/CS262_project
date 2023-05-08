@@ -1,8 +1,8 @@
 F = 1      # number of faulty servers we want to tolerate
 
-need_persistent = True      # whether we need our servers to be persistent
+need_persistent = False      # whether we need our servers to be persistent
 
-local = False        # whether to run the system locally
+local = True        # whether to run the system locally
 
 class ServerInfo():
     def __init__(self, id, ip_addr, client_port, raft_port):
