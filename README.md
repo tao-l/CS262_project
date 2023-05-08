@@ -150,7 +150,7 @@ Then let one buyer withdraw and finish the auction.
 </p>
 Finally, restart all servers and start a new buyer. The new buyer is able to see all previous auctions, including the third auction during which all servers crashes. 
 <p align="center">
-  <img width="600" src="Images/Images/server_crash_auction_finish_new_buyer.png">
+  <img width="600" src="Images/server_crash_auction_finish_new_buyer.png">
 </p>
 This is realized by seller continuously updating auction info to servers.
 
