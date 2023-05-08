@@ -1,6 +1,6 @@
-# CS262_project: PPAPD -- P2P Ascending Price Distributed Auction
+# CS262 Project: PPAPD -- P2P Ascending Price Distributed Auction
 
-Project presentation and final report is in the `Presentables` folder. Below complements to two files with technical details and code demonstrations.
+Project presentation and final report are in the `Presentables` folder. Below complements the two files with technical details and code demonstrations.
 
 # Running the Programs
 
