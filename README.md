@@ -1,5 +1,7 @@
 # CS262_project: PPAPD -- P2P Ascending Price Distributed Auction
 
+Project presentation and final report is in the `Presentables` folder. Below complements to two files with technical details and code demonstrations.
+
 # Running the Programs
 
 Make sure you have installed the gRPC python package first.  If you haven't, run:
