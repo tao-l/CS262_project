@@ -80,7 +80,7 @@ The `auction.proto` also contains the rpc service that the server provides.
 
 # Demonstration
 To see the capability of the system, we recommend the following three tests 
-### Success Trail
+### Success Trial
 This trial demonstrates a successful auction. First open three servers in three terminals using commands
 ```console
 $ python3 server.py 0
