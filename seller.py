@@ -15,7 +15,7 @@ import copy
 import utils
 from utils import UserData, AuctionData, ItemData, price_to_string
 
-import test_toolkit
+# import test_toolkit
 import logging
 
 
@@ -35,6 +35,21 @@ class Data():
 
 
 class Seller(QObject):
+    """ The main Buyer object. At a high level, the object contains 4 components:
+
+        1. self.data : contains all the data the seller has (like auction data)
+        2. self.ui   : manages the UI window
+        3. self.rpc  : provides RPC services to buyers
+        4. self      : contains functions that take input from the UI part and the RPC part,
+                       manipulate the data, tell the UI part to update, and return responses for RPCs
+        
+        The seller object takes input both from the user via the UI component (self.ui)
+        and from buyers via the RPC component (self.rpc), manipuates the data, 
+        and then notifies the UI component to update
+        or returns results to the RPC component which then returns responses to the buyers.
+
+        The seller also makes RPC requests to the platform server, using the given server_stubs.  
+    """
     ui_update_auctions_signal = pyqtSignal()
     ui_update_all_signal = pyqtSignal()
 
