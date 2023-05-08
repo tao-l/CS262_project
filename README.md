@@ -78,6 +78,7 @@ Sellers related files are the following
 +-- raft.proto
 ``` 
 The `auction.proto` also contains the rpc service that the server provides.
+Test codes including the unittests are in the `Test` folder.
 
 
 # Demonstration
