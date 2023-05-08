@@ -1,5 +1,8 @@
 import grpc
 import json
+
+import sys
+sys.path.append('../')
 import config
 import server
 import auction_pb2

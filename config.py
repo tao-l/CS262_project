@@ -2,7 +2,7 @@ F = 1      # number of faulty servers we want to tolerate
 
 need_persistent = True      # whether we need our servers to be persistent
 
-local = False        # whether to run the system locally
+local = True        # whether to run the system locally
 
 class ServerInfo():
     def __init__(self, id, ip_addr, client_port, raft_port):
@@ -11,9 +11,9 @@ class ServerInfo():
         self.client_port = client_port
         self.raft_port = raft_port
 
-replicas = ( ServerInfo(0, "10.250.215.194", "20000", "30000"), 
-             ServerInfo(1, "10.250.151.190", "20010", "30010"), 
-             ServerInfo(2, "10.250.151.190", "20020", "30020"), 
+replicas = ( ServerInfo(0, "127.0.0.1", "20000", "30000"), 
+             ServerInfo(1, "127.0.0.1", "20010", "30010"), 
+             ServerInfo(2, "127.0.0.1", "20020", "30020"), 
            )
 
 if local:

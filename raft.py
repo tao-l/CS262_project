@@ -12,6 +12,7 @@ import threading
 import queue
 import random
 
+import os
 from time import sleep
 import config
 
@@ -82,6 +83,8 @@ class RaftServiceServicer(raft_pb2_grpc.RaftServiceServicer):
         #  record whether we need persistency or not 
         self.need_persistent = need_persistent
         #  the file where the persistent states are saved
+        if not os.path.exists("./RAFT_records"):
+            os.makedirs("./RAFT_records")
         self.filename = f"./RAFT_records/record{self.my_id}"
         if self.need_persistent:
             with self.lock:
