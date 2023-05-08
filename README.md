@@ -180,7 +180,7 @@ RAFT is a leader-follower algorithm.  The full algorithm is complicated.  We onl
 
 We omit many details here.  One can read the [original paper](https://raft.github.io/raft.pdf) or other resources for details.
 
-## Failure Modes We Support
+### Failure Modes We Support
 Because we implemented the RAFT algorithm, our server can survive all the failures that RAFT can survice, including: 
 
 1. Crashes: Less than a half of the serves crashes.  
@@ -207,4 +207,4 @@ RAFT does not know anything about the state machine and the state machine does n
 ### Client
 
 The client does not know which server replica is the leader, so it just calls all replicas one by one until receiving a valid reply (a non-leader server replies with an error message).
-Occasionally, all the servers will be unavailable due to, e.g., leader election, in which case the client program will display a "Server Error" message on screen to prompt the user to re-try. 
+Occasionally, all the replicas will be unavailable due to leader election, in which case the client program will display a "Server Error" message on screen to prompt the user to re-try. 
