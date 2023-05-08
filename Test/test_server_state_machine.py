@@ -1,5 +1,7 @@
 import unittest
 import json
+import sys
+sys.path.append('../')
 import config
 from server_state_machine import StateMachine
 
@@ -23,7 +25,7 @@ class StateMachineTestSellerRelated(unittest.TestCase):
                 "created": True,
                 "finished": False,
                 "started": False,
-                "buyers":["buyer1","buyer2"],
+                "buyers":{"buyer1":True,"buyer2":True},
                 "round_id":-1,
                 "current_price": 0,
                 "transaction_price": -1,
@@ -120,7 +122,7 @@ class StateMachineTestBuyerRelated(unittest.TestCase):
                 "created": True,
                 "finished": False,
                 "started": False,
-                "buyers":["buyer1","buyer2"],
+                "buyers":{"buyer1":True,"buyer2":True},
                 "round_id":-1,
                 "current_price": 0,
                 "transaction_price": -1,
