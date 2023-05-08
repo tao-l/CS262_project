@@ -62,36 +62,6 @@ __To run a client__, run:
 $ python3 client.py
 ```
 
-# Demonstration
-To see the capability of the system, we recommend the following three tests 
-### Success Trail
-This trial demonstrates a successful auction. First open three servers in three terminals using commands
-```console
-$ python3 server.py 0
-$ python3 server.py 1
-$ python3 server.py 2
-```
-The servers will run and successfully select a leader node. ![server_select_leader](Images/server_select_leader.png)
-
-Then in three different terminals, start one seller and three buyers with the same following command 
-```console
-$ python3 client.py
-```
-Buyers and sellers share the same login prompt ![login_to_seller_or_buyer](Images/login_to_seller_or_buyer.png)
-After the three clients are logged in, the seller can create a new auction by inputting the auction name, item name and item descriptions.  ![seller_create_auction](Images/seller_create_auction.png)
-The new created auction will now appear in all sellers and the buyers' propts ![after_auction_created](Images/after_auction_created.png)
-Buyers can now view the auction and decide to join the auction. If a buyer join, she can view who else has joined the auction and also retains the opportunity to quit. If a buyer does not, she cannot see the detailed information of the auction. The auction owner's view is updated accordingly to who has joined the auction. ![one_buyer_join](Images/one_buyer_join.png)
-
-Now let the other buyer join as well (otherwise the auction will finish automatically because their is only one buyer). The seller can now start the auction and prices begin to increase. Buyers and sellers can see the price increasing continuously in the prompt. ![auction_starts](Images/auction_starts.png)
-When a buyer deem the current price is too high, she can click the `withdraw` button and withdraw from the auction. Once withdrawn, this buyer cannot rejoin the auction anymore. In our two buyer example, if one buyer withdraw, there is only one more buyer remaining and the auction will stop. When an auction finishes, all buyers and seller can view the winner, transaction price, and other related info, and the platform is notified of the auction result ![auction_finishes](Images/auction_finishes.png)
-
-### Seller Crashes and Reconnects
-We now test the redundancy and fault tolerance feature of our system by mimicing a seller crashing in an auction and re-login to resume the auction. Note a buyer crashing in an auction is regarded as the buyer withdrawing from auction. With the same two buyers one seller system, have the seller create another auction and starts the auction. When the seller crashes, on the buyers' prompts the auction is paused ![seller_crash_buyer_pauses](Images/seller_crash_buyer_pauses.png)  When the seller relog in, the buyers will receive a notification of the sellers' relogin. ![seller_crash_relogin](Images/seller_crash_relogin.png). And finally after the seller relog in, it can choose to resume the previous paused auction. ![seller_crash_resumes](Images/seller_crash_resumes.png)
-
-### Server Crashes and Reconnects
-We now test the redundancy and fault tolerance feature of our system by mimicing the entire set of platform servers going down. The sellers and buyers during an auction should all continue to function properly and pick up. Let the seller create a third auction `server fails`, let both buyers join the platform and sellers start the auction. Then force stop all servers in the terminal. The auction will continue between the sellers and buyers as it were.![seller_crash](Images/seller_crash.png) Then let one buyer withdraw and finish the auction. ![seller_crash_auction_finish](Images/seller_crash_auction_finish.png) Finally, restart all servers and start a new buyer. The new buyer is able to see all previous auctions, including the third auction during which all servers crashes. ![seller_crash_auction_finish_new_buyer](Images/seller_crash_auction_finish_new_buyer.png) This is realized by seller continuously updating auction info to servers.
-
-
 # Code Structure
 Code can be divided into three sections: buyers related, sellers related, platform related, and the shared grpc protocol file. For buyers and sellers related, `client.py` accesses the buyer and the seller, while `auction.proto` defines the rpc service function calls between the buyers and the sellers.
 ```
@@ -106,6 +76,81 @@ Sellers related files are the following
 +-- raft.proto
 ``` 
 The `auction.proto` also contains the rpc service that the server provides.
+
+
+# Demonstration
+To see the capability of the system, we recommend the following three tests 
+### Success Trail
+This trial demonstrates a successful auction. First open three servers in three terminals using commands
+```console
+$ python3 server.py 0
+$ python3 server.py 1
+$ python3 server.py 2
+```
+The servers will run and successfully select a leader node. 
+<p align="center">
+  <img height="400" src="Images/server_select_leader.png">
+</p>
+
+Then in three different terminals, start one seller and three buyers with the same following command 
+```console
+$ python3 client.py
+```
+Buyers and sellers share the same login prompt 
+<p align="center">
+  <img width="300" src="Images/login_to_seller_or_buyer.png">
+</p>
+After the three clients are logged in, the seller can create a new auction by inputting the auction name, item name and item descriptions.  
+<p align="center">
+  <img width="600" src="Images/seller_create_auction.png">
+</p>
+The new created auction will now appear in all sellers and the buyers' propts 
+<p align="center">
+  <img width="600" src="Images/after_auction_created.png">
+</p>
+Buyers can now view the auction and decide to join the auction. If a buyer join, she can view who else has joined the auction and also retains the opportunity to quit. If a buyer does not, she cannot see the detailed information of the auction. The auction owner's view is updated accordingly to who has joined the auction. 
+<p align="center">
+  <img width="600" src="Images/one_buyer_join.png">
+</p>
+
+Now let the other buyer join as well (otherwise the auction will finish automatically because their is only one buyer). The seller can now start the auction and prices begin to increase. Buyers and sellers can see the price increasing continuously in the prompt. 
+<p align="center">
+  <img width="600" src="Images/auction_starts.png">
+</p>
+When a buyer deem the current price is too high, she can click the `withdraw` button and withdraw from the auction. Once withdrawn, this buyer cannot rejoin the auction anymore. In our two buyer example, if one buyer withdraw, there is only one more buyer remaining and the auction will stop. When an auction finishes, all buyers and seller can view the winner, transaction price, and other related info, and the platform is notified of the auction result 
+<p align="center">
+  <img width="600" src="Images/auction_finishes.png">
+</p>
+
+### Seller Crashes and Reconnects
+We now test the redundancy and fault tolerance feature of our system by mimicing a seller crashing in an auction and re-login to resume the auction. Note a buyer crashing in an auction is regarded as the buyer withdrawing from auction. With the same two buyers one seller system, have the seller create another auction and starts the auction. When the seller crashes, on the buyers' prompts the auction is paused 
+<p align="center">
+  <img width="600" src="Images/seller_crash_buyer_pauses.png">
+</p>
+When the seller relog in, the buyers will receive a notification of the sellers' relogin. 
+<p align="center">
+  <img width="600" src="Images/seller_crash_relogin.png">
+</p>
+And finally after the seller relog in, it can choose to resume the previous paused auction. 
+<p align="center">
+  <img width="600" src="Images/seller_crash_resumes.png">
+</p>
+
+### Server Crashes and Reconnects
+We now test the redundancy and fault tolerance feature of our system by mimicing the entire set of platform servers going down. The sellers and buyers during an auction should all continue to function properly and pick up. Let the seller create a third auction `server fails`, let both buyers join the platform and sellers start the auction. Then force stop all servers in the terminal. The auction will continue between the sellers and buyers as it were.
+<p align="center">
+  <img width="600" src="Images/server_crash.png">
+</p>
+Then let one buyer withdraw and finish the auction. 
+<p align="center">
+  <img width="600" src="Images/server_crash_auction_finish.png">
+</p>
+Finally, restart all servers and start a new buyer. The new buyer is able to see all previous auctions, including the third auction during which all servers crashes. 
+<p align="center">
+  <img width="600" src="Images/Images/server_crash_auction_finish_new_buyer.png">
+</p>
+This is realized by seller continuously updating auction info to servers.
+
 
 # RAFT for fault tolerance and redundancy
 A detailed examination of design and modeling choices is given in `final_report.pdf`. The below complements the report, and illustrates the mechanism of the __RAFT__ algorithm implemented on the platform for fault tolerance and redundancy. __RAFT__ related content is in `raft.py`, `server.py`, and 'raft.proto'.
